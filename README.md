@@ -37,10 +37,17 @@ instead of walking one deal at a time.
   exploitability → 0 — CFR+ reaches **~0.3% of pot at 2000 iters** on a sample
   spot — and the constant-sum invariant `u0 + u1 = base_pot · Z` holds exactly.
   `test_solver.py`.
-- **Phase 4 — verification**
-  Exploitability → 0 (% of pot); cross-check small spots against brute force.
-- **Phase 5 — usability**
-  Real input ranges, richer bet trees, strategy/EV readouts, numpy perf pass.
+- **Phase 4 — verification + readout** ✅
+  `verify.py` — an independent Monte-Carlo playout of the average strategy
+  reproduces the solver's computed game value (a separate code path must agree,
+  the Leduc-vs-OpenSpiel discipline). `test_verify.py` — the exploitability
+  metric discriminates (uniform ~34 vs solved <1 chips/hand). `readout.py` /
+  `solve_river.py` — range-weighted action mix and per-hand strategy. The solved
+  strategy is textbook-**polarized** (value-bet the nuts, bluff the worst hands,
+  check medium) — discovered from scratch.
+- **Phase 5 — usability & scale** (next)
+  Real input ranges, richer bet trees, faster CFR (the O(N log N) showdown for
+  turn/flop), and a cleaner solve API.
 
 ## Run the tests
 
@@ -49,6 +56,9 @@ python test_cards.py && python test_evaluator.py && python test_board.py
 python test_terminal.py            # Phase 1 (needs numpy)
 python test_betting.py             # Phase 2
 python test_solver.py              # Phase 3 (~11s: trains a real spot)
+python test_verify.py              # Phase 4 (metric + Monte-Carlo cross-check)
+
+python solve_river.py              # solve a spot and print the strategy
 ```
 
 Phase 0 is pure standard library; numpy enters at Phase 1 for the vectorized

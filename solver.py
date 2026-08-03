@@ -38,6 +38,7 @@ class Solver:
     def __init__(self, board, base_pot=20.0, stack=80.0,
                  fractions=(0.33, 0.66), first_actor=0):
         self.combos, strengths = board_strengths(board)
+        self.strengths = np.asarray(strengths)
         self.N = len(self.combos)
         self.M = showdown_matrix(self.combos, strengths)   # +1/0/-1, blocked -> 0
         self.C = compatibility_mask(self.combos)           # 1 if no shared card
