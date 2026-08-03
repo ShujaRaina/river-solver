@@ -3,7 +3,16 @@
 const RANKS = "AKQJT98765432";
 const SUITS = [["s", "♠", "spade"], ["h", "♥", "heart"],
                ["d", "♦", "diamond"], ["c", "♣", "club"]];
-const PALETTE = ["#3fb27f", "#e9c46a", "#f4a261", "#e35d5d", "#b07de8"];
+const PALETTE = ["#3fb27f", "#e9c46a", "#f4a261", "#e76f51", "#b0202b"];
+
+// pretty action labels: "bet33" -> "Bet 33", "allin" -> "All In"
+function displayName(a) {
+  const fixed = { check: "Check", call: "Call", fold: "Fold", allin: "All In" };
+  if (fixed[a]) return fixed[a];
+  const m = a.match(/^(bet|raise)(\d+)$/);
+  if (m) return m[1][0].toUpperCase() + m[1].slice(1) + " " + m[2];
+  return a;
+}
 
 const state = {
   board: [],                 // up to 5 card strings, e.g. "As"
@@ -96,7 +105,7 @@ function paintCell(player, label) {
   const w = state.ranges[player][label] || 0;
   cell.classList.toggle("on", w > 0);
   cell.querySelector(".fill").style.opacity = w * 0.85;
-  cell.querySelector(".fill").style.background = player === 0 ? "#4c9be8" : "#b07de8";
+  cell.querySelector(".fill").style.background = player === 0 ? "#4c9be8" : "#e35d5d";
 }
 function paintGrid(player) {
   for (let row = 0; row < 13; row++)
@@ -134,11 +143,12 @@ async function solve() {
 function renderResult(data) {
   document.getElementById("results").hidden = false;
   document.getElementById("expl").textContent =
-    `exploitability ${data.exploitability_pct}% of pot`;
+    `exploitability ${data.exploitability_bb.toFixed(2)} bb`;
 
   const legend = document.getElementById("legend");
   legend.innerHTML = data.actions.map((a, i) =>
-    `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${a}</span>`).join("");
+    `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>` +
+    `${displayName(a)} ${Math.round(data.mix[i] * 100)}%</span>`).join("");
 
   const grid = document.getElementById("grid-result");
   grid.innerHTML = "";

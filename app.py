@@ -62,11 +62,12 @@ def solve_spot(board_strs, r0_classes, r1_classes, pot, stack, fractions, iters)
         grid[cls] = [round(float(x), 4) for x in dist]
 
     weights = acting_range / acting_range.sum()
+    expl = float(solver.exploitability())         # chips/hand == bb (pot/stack are in bb)
     return {
         "actions": labels,
         "root_player": root.player,
         "mix": [round(float(x), 4) for x in weights @ avg],
-        "exploitability_pct": round(100 * solver.exploitability() / float(pot), 3),
+        "exploitability_bb": round(expl, 3),
         "strategy": grid,
     }
 
@@ -89,7 +90,7 @@ def solve():
         result = solve_spot(
             board, data["range0"], data["range1"],
             data.get("pot", 20), data.get("stack", 80),
-            data.get("fractions", [0.33, 0.66]), data.get("iters", 250),
+            data.get("fractions", [0.33, 0.66, 1.0]), data.get("iters", 250),
         )
         return jsonify(result)
     except Exception as e:
