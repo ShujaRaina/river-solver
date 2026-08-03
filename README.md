@@ -24,9 +24,12 @@ instead of walking one deal at a time.
   terminal EV a single matrix-vector product. Differentially verified against a
   pure-Python O(N²) brute force. (The O(N log N) prefix-sum showdown is deferred
   to when turn/flop runouts make an N² matrix per board too big to store.)
-- **Phase 2 — betting tree / action abstraction**
-  Finite tree from (pot, stack, bet sizes, raise cap): nodes, legal actions,
-  pot accounting.
+- **Phase 2 — betting tree / action abstraction** ✅
+  `betting.py`. Finite tree from (starting pot, effective stack, bet-size set) —
+  **no raise cap**; the stack bounds it (raises escalate to all-in). Default spot:
+  pot 20, stack 80 (SPR 4), sizes {33%, 66%, all-in}, P0 out of position.
+  Pot-relative sizing, terminal classification, and pot accounting; verified in
+  `test_betting.py` (60 decision nodes, 117 terminals).
 - **Phase 3 — vectorized CFR engine**
   Per-combo regret/strategy arrays; vanilla CFR first, then CFR+/DCFR.
 - **Phase 4 — verification**
@@ -39,6 +42,7 @@ instead of walking one deal at a time.
 ```bash
 python test_cards.py && python test_evaluator.py && python test_board.py
 python test_terminal.py            # Phase 1 (needs numpy)
+python test_betting.py             # Phase 2
 ```
 
 Phase 0 is pure standard library; numpy enters at Phase 1 for the vectorized
