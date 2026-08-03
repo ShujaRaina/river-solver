@@ -30,8 +30,13 @@ instead of walking one deal at a time.
   pot 20, stack 80 (SPR 4), sizes {33%, 66%, all-in}, P0 out of position.
   Pot-relative sizing, terminal classification, and pot accounting; verified in
   `test_betting.py` (60 decision nodes, 117 terminals).
-- **Phase 3 — vectorized CFR engine**
-  Per-combo regret/strategy arrays; vanilla CFR first, then CFR+/DCFR.
+- **Phase 3 — vectorized CFR engine** ✅
+  `solver.py`. Per-combo regret/strategy arrays over the betting tree; reach
+  vectors propagated down, vector-CFR updates, dead-money-correct terminal
+  values; CFR+ (regret floored at 0, linear averaging). Verified by
+  exploitability → 0 — CFR+ reaches **~0.3% of pot at 2000 iters** on a sample
+  spot — and the constant-sum invariant `u0 + u1 = base_pot · Z` holds exactly.
+  `test_solver.py`.
 - **Phase 4 — verification**
   Exploitability → 0 (% of pot); cross-check small spots against brute force.
 - **Phase 5 — usability**
@@ -43,6 +48,7 @@ instead of walking one deal at a time.
 python test_cards.py && python test_evaluator.py && python test_board.py
 python test_terminal.py            # Phase 1 (needs numpy)
 python test_betting.py             # Phase 2
+python test_solver.py              # Phase 3 (~11s: trains a real spot)
 ```
 
 Phase 0 is pure standard library; numpy enters at Phase 1 for the vectorized
