@@ -18,9 +18,12 @@ instead of walking one deal at a time.
   `cards.py` (int 0..51 representation, parsing, combos), `evaluator.py` (5- and
   7-card hand scoring), `board.py` (dense per-combo showdown strength on a board).
   Hand-checked in `test_cards.py`, `test_evaluator.py`, `test_board.py`.
-- **Phase 1 — ranges + terminal EV** (next)
-  Range vectors, card-removal/blockers, fold and showdown EV over ranges; the
-  fast O(N log N) sorted-prefix-sum showdown verified against an O(N²) brute force.
+- **Phase 1 — ranges + terminal EV** ✅
+  `ranges.py`, `terminal.py`. Card-removal/blockers, fold + showdown EV over
+  ranges via a precomputed N×N showdown matrix (blocked pairs zeroed), each
+  terminal EV a single matrix-vector product. Differentially verified against a
+  pure-Python O(N²) brute force. (The O(N log N) prefix-sum showdown is deferred
+  to when turn/flop runouts make an N² matrix per board too big to store.)
 - **Phase 2 — betting tree / action abstraction**
   Finite tree from (pot, stack, bet sizes, raise cap): nodes, legal actions,
   pot accounting.
@@ -35,7 +38,8 @@ instead of walking one deal at a time.
 
 ```bash
 python test_cards.py && python test_evaluator.py && python test_board.py
+python test_terminal.py            # Phase 1 (needs numpy)
 ```
 
-Phases 0–2 are pure standard library; numpy comes in at Phase 3 for the
-vectorized CFR.
+Phase 0 is pure standard library; numpy enters at Phase 1 for the vectorized
+terminal EV (`pip install -r requirements.txt`).
