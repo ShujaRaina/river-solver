@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>River Solver</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>River Solver</h1>
+    <p class="sub">Heads-up no-limit river subgame &middot; vectorized CFR+</p>
+  </header>
+
+  <main>
+    <!-- Board -->
+    <section class="panel">
+      <h2>Board <span class="hint">pick 5</span></h2>
+      <div id="board-slots" class="board-slots"></div>
+      <div id="card-picker" class="card-picker"></div>
+    </section>
+
+    <!-- Ranges -->
+    <section class="panel">
+      <h2>Ranges</h2>
+      <div class="weight-row">
+        <label>Paint weight: <span id="weight-label">100%</span></label>
+        <input type="range" id="weight" min="0" max="100" value="100" />
+      </div>
+      <div class="ranges">
+        <div class="range-block">
+          <div class="range-head"><span class="dot p0"></span> P0 &middot; out of position
+            <button class="clear" data-player="0">clear</button></div>
+          <div id="grid-0" class="range-grid"></div>
+        </div>
+        <div class="range-block">
+          <div class="range-head"><span class="dot p1"></span> P1 &middot; in position
+            <button class="clear" data-player="1">clear</button></div>
+          <div id="grid-1" class="range-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section class="panel controls">
+      <label>Pot <input type="number" id="pot" value="20" min="1" /></label>
+      <label>Stack <input type="number" id="stack" value="80" min="1" /></label>
+      <label>Iterations <input type="number" id="iters" value="250" min="20" step="10" /></label>
+      <button id="solve" class="solve">Solve</button>
+      <span id="status" class="status"></span>
+    </section>
+
+    <!-- Results -->
+    <section class="panel" id="results" hidden>
+      <h2>Result <span id="expl" class="hint"></span></h2>
+      <div id="legend" class="legend"></div>
+      <div class="range-block">
+        <div class="range-head">P0 strategy (acting player)</div>
+        <div id="grid-result" class="range-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

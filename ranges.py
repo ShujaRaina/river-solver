@@ -106,6 +106,20 @@ def _expand(expr):
     return _class_combos(h, l, su)
 
 
+def range_from_classes(class_weights, combos):
+    """Build a weight vector from a {hand_class: weight} dict, e.g. from a 13x13
+    range grid: {"AA": 1.0, "AKs": 0.5, "AKo": 1.0, ...}. Card removal automatic."""
+    index = {c: i for i, c in enumerate(combos)}
+    weights = np.zeros(len(combos))
+    for label, w in class_weights.items():
+        if w <= 0:
+            continue
+        for combo in _expand(label):
+            if combo in index:
+                weights[index[combo]] = float(w)
+    return weights
+
+
 def parse_range(spec, combos):
     """Turn a range string into a weight vector aligned with `combos`.
     Combos using a board card aren't in `combos`, so they're dropped (card

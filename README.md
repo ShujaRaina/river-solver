@@ -52,6 +52,21 @@ instead of walking one deal at a time.
   Still open: faster CFR (batch the terminal matvecs, or the O(N log N) showdown
   for turn/flop) and richer bet trees.
 
+## Web GUI
+
+An interactive frontend: pick the 5 board cards from a 52-card grid, set each
+player's range on the standard 13×13 grid (drag to paint, weight slider for
+partial combos), and solve — the result colours P0's grid by action frequency.
+
+```bash
+pip install flask
+python app.py                      # -> http://127.0.0.1:5000
+```
+
+Backend `app.py` (Flask) wraps the solver behind `POST /solve`; frontend under
+`static/` is plain HTML/CSS/JS (no build step). A default board + ranges are
+pre-filled so you can hit Solve immediately.
+
 ## Run the tests
 
 ```bash
