@@ -45,9 +45,12 @@ instead of walking one deal at a time.
   `solve_river.py` — range-weighted action mix and per-hand strategy. The solved
   strategy is textbook-**polarized** (value-bet the nuts, bluff the worst hands,
   check medium) — discovered from scratch.
-- **Phase 5 — usability & scale** (next)
-  Real input ranges, richer bet trees, faster CFR (the O(N log N) showdown for
-  turn/flop), and a cleaner solve API.
+- **Phase 5 — usability & scale** (in progress)
+  Real input ranges via poker notation — `ranges.parse_range("AA-TT, AKs,
+  A5s:0.5", combos)` → weight vector, with automatic card removal; `solve_river.py`
+  now solves hand-specified ranges (pairs, suited/offsuit, +, dashes, weights).
+  Still open: faster CFR (batch the terminal matvecs, or the O(N log N) showdown
+  for turn/flop) and richer bet trees.
 
 ## Run the tests
 
@@ -57,8 +60,9 @@ python test_terminal.py            # Phase 1 (needs numpy)
 python test_betting.py             # Phase 2
 python test_solver.py              # Phase 3 (~11s: trains a real spot)
 python test_verify.py              # Phase 4 (metric + Monte-Carlo cross-check)
+python test_ranges.py              # Phase 5 (range notation)
 
-python solve_river.py              # solve a spot and print the strategy
+python solve_river.py              # solve a spot (real ranges) and print the strategy
 ```
 
 Phase 0 is pure standard library; numpy enters at Phase 1 for the vectorized
