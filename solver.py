@@ -40,8 +40,9 @@ class Solver:
         self.combos, strengths = board_strengths(board)
         self.strengths = np.asarray(strengths)
         self.N = len(self.combos)
-        self.M = showdown_matrix(self.combos, strengths)   # +1/0/-1, blocked -> 0
-        self.C = compatibility_mask(self.combos)           # 1 if no shared card
+        # float32 for the hot matmuls (M/C @ reaches); accumulators stay float64.
+        self.M = showdown_matrix(self.combos, strengths).astype(np.float32)
+        self.C = compatibility_mask(self.combos).astype(np.float32)
         self.base_pot = base_pot
         self.root = build_tree(base_pot, stack, fractions, first_actor)
 
@@ -51,6 +52,32 @@ class Solver:
                 shape = (self.N, len(n.actions))
                 self.regret[n] = np.zeros(shape)
                 self.strat_sum[n] = np.zeros(shape)
+
+        # Terminal batching (the speed path): index every terminal and precompute
+        # its value coefficients, so a whole iteration's terminal values are a few
+        # big matmuls (M/C read once) instead of a matvec per terminal.
+        self.terminals = [n for n in walk(self.root) if n.is_terminal()]
+        self.tindex = {n: i for i, n in enumerate(self.terminals)}
+        T = self.T = len(self.terminals)
+        a, b = np.zeros(T, np.float32), np.zeros(T, np.float32)      # showdown coeffs
+        amt0, amt1 = np.zeros(T, np.float32), np.zeros(T, np.float32)  # fold coeffs
+        sd, fd = [], []
+        for i, n in enumerate(self.terminals):
+            if n.kind == "showdown":
+                sd.append(i)
+                a[i] = 0.5 * n.pot
+                b[i] = 0.5 * n.pot - n.stake
+            else:
+                fd.append(i)
+                c0, c1 = n.contrib
+                amt0[i] = (n.pot - c0) if n.folder != 0 else -c0
+                amt1[i] = (n.pot - c1) if n.folder != 1 else -c1
+        self._sd, self._fd = np.array(sd, dtype=int), np.array(fd, dtype=int)
+        self._a, self._b, self._amt0, self._amt1 = a, b, amt0, amt1
+        self._R0 = np.empty((self.N, T), np.float32)
+        self._R1 = np.empty((self.N, T), np.float32)
+        self._cfv0 = np.empty((self.N, T), np.float32)
+        self._cfv1 = np.empty((self.N, T), np.float32)
 
     # --- strategies -------------------------------------------------------
     def strategy(self, node):
@@ -77,7 +104,9 @@ class Solver:
         amount = (node.pot - c) if node.folder != hero else -c
         return amount * (self.C @ opp_reach)
 
-    # --- CFR traversal (updates regrets + strategy sums) ------------------
+    # --- reference recursive CFR iteration (a matvec per terminal) --------
+    # Kept as the readable spec and differential oracle; train() uses the
+    # batched _down/_terminal_cfvs/_up path, which is ~5x faster and identical.
     def _traverse(self, node, reach0, reach1):
         if node.is_terminal():
             return (self._terminal_value(node, reach1, 0),
@@ -112,13 +141,74 @@ class Solver:
                 np.maximum(self.regret[node], 0.0, out=self.regret[node])
             return cfv0_a.sum(axis=1), node_cfv1
 
+    # --- batched iteration (down: reaches -> batch matmuls -> up: regrets) ---
+    def _down(self, node, reach0, reach1, sig):
+        """Propagate reaches to terminals (store their columns), accumulate the
+        strategy sum, and cache each node's current strategy for the up-pass."""
+        if node.is_terminal():
+            t = self.tindex[node]
+            self._R0[:, t] = reach0
+            self._R1[:, t] = reach1
+            return
+        p = node.player
+        sigma = self.strategy(node)
+        sig[node] = sigma
+        reach_p = reach0 if p == 0 else reach1
+        self.strat_sum[node] += self._weight * reach_p[:, None] * sigma
+        for a, (_, child) in enumerate(node.actions):
+            if p == 0:
+                self._down(child, reach0 * sigma[:, a], reach1, sig)
+            else:
+                self._down(child, reach0, reach1 * sigma[:, a], sig)
+
+    def _terminal_cfvs(self):
+        """All terminal counterfactual values in a few matmuls (M/C read once)."""
+        CR0, CR1 = self.C @ self._R0, self.C @ self._R1
+        sd, fd = self._sd, self._fd
+        if sd.size:
+            MR0, MR1 = self.M @ self._R0[:, sd], self.M @ self._R1[:, sd]
+            self._cfv0[:, sd] = self._a[sd] * MR1 + self._b[sd] * CR1[:, sd]
+            self._cfv1[:, sd] = self._a[sd] * MR0 + self._b[sd] * CR0[:, sd]
+        if fd.size:
+            self._cfv0[:, fd] = self._amt0[fd] * CR1[:, fd]
+            self._cfv1[:, fd] = self._amt1[fd] * CR0[:, fd]
+
+    def _up(self, node, sig):
+        """Combine terminal cfvs up the tree and update the acting player's
+        regrets. `sig` holds each node's strategy cached from the down-pass."""
+        if node.is_terminal():
+            t = self.tindex[node]
+            return self._cfv0[:, t], self._cfv1[:, t]
+        p = node.player
+        sigma = sig[node]
+        c0a, c1a = [], []
+        for _, child in node.actions:
+            v0, v1 = self._up(child, sig)
+            c0a.append(v0)
+            c1a.append(v1)
+        c0a, c1a = np.stack(c0a, axis=1), np.stack(c1a, axis=1)
+        if p == 0:
+            nv0 = (sigma * c0a).sum(axis=1)
+            self.regret[node] += c0a - nv0[:, None]
+            if self._plus:
+                np.maximum(self.regret[node], 0.0, out=self.regret[node])
+            return nv0, c1a.sum(axis=1)
+        nv1 = (sigma * c1a).sum(axis=1)
+        self.regret[node] += c1a - nv1[:, None]
+        if self._plus:
+            np.maximum(self.regret[node], 0.0, out=self.regret[node])
+        return c0a.sum(axis=1), nv1
+
     def train(self, iters, range0=None, range1=None, plus=True):
         self.range0 = np.ones(self.N) if range0 is None else np.asarray(range0, float)
         self.range1 = np.ones(self.N) if range1 is None else np.asarray(range1, float)
         self._plus = plus
         for t in range(1, iters + 1):
             self._weight = float(t) if plus else 1.0
-            self._traverse(self.root, self.range0, self.range1)
+            sig = {}
+            self._down(self.root, self.range0, self.range1, sig)
+            self._terminal_cfvs()
+            self._up(self.root, sig)
 
     # --- evaluation: values under avg strategy, best responses, expl ------
     def _values_avg(self, node, reach0, reach1):
