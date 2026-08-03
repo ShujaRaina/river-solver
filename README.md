@@ -44,7 +44,11 @@ instead of walking one deal at a time.
   metric discriminates (uniform ~34 vs solved <1 chips/hand). `readout.py` /
   `solve_river.py` — range-weighted action mix and per-hand strategy. The solved
   strategy is textbook-**polarized** (value-bet the nuts, bluff the worst hands,
-  check medium) — discovered from scratch.
+  check medium) — discovered from scratch. `lp_verify.py` / `test_lp.py` — the
+  gold-standard check: on a small instance, CFR converges to the **exact**
+  equilibrium value from an independent minimax LP over the pure-strategy matrix
+  (gap ~1e-5), so the engine provably finds the true equilibrium — not just a low
+  number from its own best-response code.
 - **Phase 5 — usability & scale** (in progress)
   Real input ranges via poker notation — `ranges.parse_range("AA-TT, AKs,
   A5s:0.5", combos)` → weight vector, with automatic card removal; `solve_river.py`
@@ -77,6 +81,7 @@ python test_terminal.py            # Phase 1 (needs numpy)
 python test_betting.py             # Phase 2
 python test_solver.py              # Phase 3 (~11s: trains a real spot)
 python test_verify.py              # Phase 4 (metric + Monte-Carlo cross-check)
+python test_lp.py                  # Phase 4 (CFR == exact LP value, ~40s)
 python test_ranges.py              # Phase 5 (range notation)
 
 python solve_river.py              # solve a spot (real ranges) and print the strategy
