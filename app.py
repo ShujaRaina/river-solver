@@ -7,6 +7,15 @@ player's strategy aggregated back onto the grid (so the frontend can colour it).
 Run:  python app.py   ->  http://127.0.0.1:8000
 """
 
+import os
+# Cap BLAS to one thread per solve (must be set before numpy imports). numpy's
+# matrix threading is pure overhead here -- the matrices are small, so all-core
+# threading spends ~1100% CPU to do the work of one core at the same wall speed.
+# Uncapped, one solve grabs every core, so N concurrent solves oversubscribe and
+# thrash; capped, each solve is ~one core and users spread across cores cleanly.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import threading
 import uuid
 
