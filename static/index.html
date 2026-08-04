@@ -15,7 +15,11 @@
   <main>
     <!-- Board -->
     <section class="panel">
-      <h2>Board <span class="hint">pick 5</span></h2>
+      <h2>Board <span id="board-hint" class="hint">pick 5</span></h2>
+      <div class="street-toggle">
+        <label><input type="radio" name="street" value="river" checked> River — 5 cards, instant</label>
+        <label><input type="radio" name="street" value="turn"> Turn — 4 cards, solves live (~minutes)</label>
+      </div>
       <div id="board-slots" class="board-slots"></div>
       <div id="card-picker" class="card-picker"></div>
     </section>

@@ -59,6 +59,7 @@ class TurnSolver:
         self.root = build_turn_tree(base_pot, stack, fractions, first_actor)
         self.regret, self.strat = {}, {}
         self._alloc(self.root, river=False)
+        self._t = 0                       # persistent iteration count (for chunked training)
 
     def _alloc(self, node, river):
         if node.is_terminal():
@@ -150,8 +151,9 @@ class TurnSolver:
                        else np.asarray(range0, np.float32))
         self.range1 = (np.ones(self.N, np.float32) if range1 is None
                        else np.asarray(range1, np.float32))
-        for t in range(1, iters + 1):
-            self._weight = float(t)
+        for _ in range(iters):
+            self._t += 1                  # persists across calls: chunked training is correct
+            self._weight = float(self._t)
             self._turn(self.root, self.range0, self.range1)
 
     # --- evaluation: average-strategy values and best responses ----------

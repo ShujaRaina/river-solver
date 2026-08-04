@@ -7,11 +7,15 @@ player's strategy aggregated back onto the grid (so the frontend can colour it).
 Run:  python app.py   ->  http://127.0.0.1:5000
 """
 
+import threading
+import uuid
+
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory
 
 from cards import parse_card
 from solver import Solver
+from turn_solver import TurnSolver
 from ranges import range_from_classes, _expand
 
 RANKS = "AKQJT98765432"          # grid order, index 0 = A (highest)
@@ -97,5 +101,75 @@ def solve():
         return jsonify({"error": str(e)}), 400
 
 
+# --- turn solve: slow, so run in a background thread and poll for live progress -
+
+_turn_jobs = {}
+
+
+def _root_grid(acting_range, combos, avg):
+    """Aggregate the root's per-combo strategy onto the 169 hand classes."""
+    index = {c: i for i, c in enumerate(combos)}
+    grid = {}
+    for cls in CLASSES:
+        idxs = [index[c] for c in _expand(cls) if c in index]
+        w = np.array([acting_range[i] for i in idxs])
+        if w.sum() <= 0:
+            grid[cls] = None
+            continue
+        dist = (w[:, None] * avg[idxs]).sum(0) / w.sum()
+        grid[cls] = [round(float(x), 4) for x in dist]
+    return grid
+
+
+def _turn_worker(job, board, r0c, r1c, pot, stack, fractions, target):
+    try:
+        s = TurnSolver(board, float(pot), float(stack), tuple(fractions))
+        r0 = range_from_classes(r0c, s.turn_combos)
+        r1 = range_from_classes(r1c, s.turn_combos)
+        if r0.sum() <= 0 or r1.sum() <= 0:
+            job["error"] = "both players need a non-empty range"
+            job["done"] = True
+            return
+        job["actions"] = s.root.labels()
+        w = r0 / r0.sum()
+        while s._t < target and not job.get("cancel"):
+            s.train(min(3, target - s._t), range0=r0, range1=r1)   # a small chunk
+            avg = s._avg(s.root, False)
+            job["iter"] = s._t
+            job["mix"] = [round(float(x), 4) for x in (w @ avg)]
+            job["strategy"] = _root_grid(r0, s.turn_combos, avg)
+        job["exploitability_bb"] = round(float(s.exploitability()), 3)
+        job["done"] = True
+    except Exception as e:                                          # noqa: BLE001
+        job["error"] = str(e)
+        job["done"] = True
+
+
+@app.route("/turn/solve", methods=["POST"])
+def turn_solve():
+    data = request.get_json(force=True)
+    board = data.get("board", [])
+    if len(board) != 4 or len(set(board)) != 4:
+        return jsonify({"error": "need exactly 4 turn board cards"}), 400
+    target = int(data.get("iters", 60))
+    jid = uuid.uuid4().hex[:8]
+    job = {"iter": 0, "done": False, "strategy": {}, "mix": [],
+           "actions": [], "exploitability_bb": None, "target": target}
+    _turn_jobs[jid] = job
+    threading.Thread(target=_turn_worker, daemon=True, args=(
+        job, [parse_card(c) for c in board], data["range0"], data["range1"],
+        data.get("pot", 20), data.get("stack", 80),
+        tuple(data.get("fractions", [0.33, 0.66, 1.0])), target)).start()
+    return jsonify({"id": jid, "target": target})
+
+
+@app.route("/turn/progress/<jid>")
+def turn_progress(jid):
+    job = _turn_jobs.get(jid)
+    if job is None:
+        return jsonify({"error": "unknown job"}), 404
+    return jsonify(job)
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000, threaded=True)

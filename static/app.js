@@ -15,12 +15,15 @@ function displayName(a) {
 }
 
 const state = {
-  board: [],                 // up to 5 card strings, e.g. "As"
+  street: "river",           // "river" (5 cards) or "turn" (4 cards)
+  board: [],                 // card strings, e.g. "As"
   ranges: [{}, {}],          // ranges[player] = { "AKs": weight, ... }
   paintWeight: 1.0,
   painting: false,
   paintMode: "paint",        // or "erase"
 };
+
+function slotCount() { return state.street === "turn" ? 4 : 5; }
 
 // class label for grid cell (row, col), matching the backend's all_classes()
 function classLabel(row, col) {
@@ -33,7 +36,7 @@ function classLabel(row, col) {
 function buildBoard() {
   const slots = document.getElementById("board-slots");
   slots.innerHTML = "";
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < slotCount(); i++) {
     const s = document.createElement("div");
     s.className = "slot";
     const card = state.board[i];
@@ -66,7 +69,7 @@ function buildBoard() {
 function toggleBoardCard(card) {
   const i = state.board.indexOf(card);
   if (i >= 0) state.board.splice(i, 1);
-  else if (state.board.length < 5) state.board.push(card);
+  else if (state.board.length < slotCount()) state.board.push(card);
   buildBoard();
 }
 
@@ -114,6 +117,7 @@ function paintGrid(player) {
 
 // ---- solve + results ------------------------------------------------------
 async function solve() {
+  if (state.street === "turn") return solveTurn();
   const status = document.getElementById("status");
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
   const btn = document.getElementById("solve");
@@ -140,10 +144,45 @@ async function solve() {
   }
 }
 
+async function solveTurn() {
+  const status = document.getElementById("status");
+  if (state.board.length !== 4) { status.textContent = "pick 4 board cards"; return; }
+  const btn = document.getElementById("solve");
+  btn.disabled = true; status.textContent = "starting turn solve…";
+  let start;
+  try {
+    start = await (await fetch("/turn/solve", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        board: state.board, range0: state.ranges[0], range1: state.ranges[1],
+        pot: +document.getElementById("pot").value,
+        stack: +document.getElementById("stack").value,
+        iters: +document.getElementById("iters").value,
+      }),
+    })).json();
+  } catch (e) { status.textContent = "request failed: " + e.message; btn.disabled = false; return; }
+  if (start.error) { status.textContent = "error: " + start.error; btn.disabled = false; return; }
+
+  const id = start.id;                       // then poll for live progress
+  const poll = async () => {
+    let d;
+    try { d = await (await fetch("/turn/progress/" + id)).json(); }
+    catch (e) { status.textContent = "poll failed: " + e.message; btn.disabled = false; return; }
+    if (d.error) { status.textContent = "error: " + d.error; btn.disabled = false; return; }
+    status.textContent = d.done
+      ? `turn solve done — ${d.iter} iters`
+      : `solving turn… iter ${d.iter}/${d.target} — watch it converge`;
+    if (d.actions && d.actions.length) renderResult(d);
+    if (d.done) { btn.disabled = false; return; }
+    setTimeout(poll, 1500);
+  };
+  poll();
+}
+
 function renderResult(data) {
   document.getElementById("results").hidden = false;
-  document.getElementById("expl").textContent =
-    `exploitability ${data.exploitability_bb.toFixed(2)} bb`;
+  document.getElementById("expl").textContent = data.exploitability_bb != null
+    ? `exploitability ${data.exploitability_bb.toFixed(2)} bb` : "";
 
   const legend = document.getElementById("legend");
   legend.innerHTML = data.actions.map((a, i) =>
@@ -180,6 +219,15 @@ document.getElementById("weight").addEventListener("input", e => {
 for (const b of document.querySelectorAll(".clear"))
   b.onclick = () => { state.ranges[b.dataset.player] = {}; paintGrid(+b.dataset.player); };
 document.getElementById("solve").onclick = solve;
+for (const r of document.querySelectorAll('input[name="street"]')) {
+  r.onchange = () => {
+    state.street = r.value;
+    document.getElementById("board-hint").textContent = "pick " + slotCount();
+    if (state.board.length > slotCount()) state.board = state.board.slice(0, slotCount());
+    document.getElementById("iters").value = state.street === "turn" ? 60 : 250;
+    buildBoard();
+  };
+}
 
 // ---- defaults so Solve works immediately ----------------------------------
 function preset() {

@@ -98,6 +98,11 @@ Backend `app.py` (Flask) wraps the solver behind `POST /solve`; frontend under
 `static/` is plain HTML/CSS/JS (no build step). A default board + ranges are
 pre-filled so you can hit Solve immediately.
 
+A **Turn** toggle switches to a 4-card board and the turn solver. Because a turn
+solve takes minutes, it runs in a background thread and the frontend **polls for
+live progress** — you watch the 13×13 strategy grid polarize in real time as CFR+
+converges (`POST /turn/solve` starts it, `GET /turn/progress/<id>` streams state).
+
 ## Run the tests
 
 ```bash
