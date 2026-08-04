@@ -29,19 +29,24 @@ own stake"); noted here so Phase 3 can just use it.
 
 
 class Node:
-    __slots__ = ("player", "contrib", "actions", "kind", "folder", "pot", "stake")
+    __slots__ = ("player", "contrib", "actions", "kind", "folder", "pot",
+                 "stake", "river_root")
 
     def __init__(self):
         self.player = None       # player to act at a decision node, else None
         self.contrib = None      # (c0, c1) chips in this street
         self.actions = []        # decision node: list of (label, child Node)
-        self.kind = None         # terminal: "fold" or "showdown"
+        self.kind = None         # "fold" / "showdown" terminal, or "chance"
         self.folder = None       # terminal fold: which player folded
-        self.pot = None          # terminal: total pot (dead money + both contribs)
+        self.pot = None          # total pot (dead money + both contribs)
         self.stake = None        # terminal showdown: each player's at-risk chips
+        self.river_root = None   # chance node: the river betting subtree
 
     def is_terminal(self):
-        return self.kind is not None
+        return self.kind in ("fold", "showdown")
+
+    def is_chance(self):
+        return self.kind == "chance"
 
     def child(self, label):
         for lab, nxt in self.actions:
@@ -54,7 +59,10 @@ class Node:
 
 
 def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
-               first_actor=0, round_to=4):
+               first_actor=0, round_to=4, on_close=None):
+    """Build one betting round. When betting closes (a call, or check-check)
+    without a fold, `on_close(contrib)` decides the continuation -- a showdown
+    terminal by default, or (for the turn) a chance node into a river round."""
     eps = 1e-9
     R = lambda x: round(x, round_to)
 
@@ -78,6 +86,8 @@ def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
         n.pot = R(base_pot + rc0 + rc1)
         return n
 
+    close = on_close or showdown          # what a closed round leads to
+
     def build(contrib, to_act, prev_checked):
         other = 1 - to_act
         to_call = contrib[other] - contrib[to_act]
@@ -89,7 +99,7 @@ def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
         if to_call <= eps:
             # No bet to face: check, or bet.
             if prev_checked:
-                node.actions.append(("check", showdown(contrib)))
+                node.actions.append(("check", close(contrib)))
             else:
                 node.actions.append(("check", build(contrib, other, True)))
             pot_now = base_pot + contrib[0] + contrib[1]
@@ -106,7 +116,7 @@ def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
             node.actions.append(("fold", fold(contrib, to_act)))
             called = list(contrib)
             called[to_act] = contrib[other]           # a call equalizes contribs
-            node.actions.append(("call", showdown(called)))
+            node.actions.append(("call", close(tuple(called))))
             pot_after_call = base_pot + 2 * contrib[other]
             sized = []
             for f in fractions:
@@ -136,20 +146,24 @@ def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
 
 
 def walk(node):
-    """Yield every node in the tree (pre-order)."""
+    """Yield every node in the tree (pre-order), descending through chance
+    nodes into their river subtrees."""
     yield node
+    if node.is_chance():
+        yield from walk(node.river_root)
     for _, child in node.actions:
         yield from walk(child)
 
 
 def counts(root):
-    decisions = terminals = folds = showdowns = 0
+    c = dict(decisions=0, chance=0, terminals=0, folds=0, showdowns=0)
     for n in walk(root):
         if n.is_terminal():
-            terminals += 1
-            folds += (n.kind == "fold")
-            showdowns += (n.kind == "showdown")
+            c["terminals"] += 1
+            c["folds"] += (n.kind == "fold")
+            c["showdowns"] += (n.kind == "showdown")
+        elif n.is_chance():
+            c["chance"] += 1
         else:
-            decisions += 1
-    return dict(decisions=decisions, terminals=terminals,
-                folds=folds, showdowns=showdowns)
+            c["decisions"] += 1
+    return c
