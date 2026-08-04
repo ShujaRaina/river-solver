@@ -63,8 +63,9 @@ V = rng.random((len(rivers), len(turn_combos))) * (strengths_stack >= 0)
 Mv_b, Cv_b = sorted_showdown_batched(strengths_stack, card_a, card_b, V)
 for k, r in enumerate(rivers):
     Mv_s, Cv_s = sorted_showdown(per_river[r], card_a, card_b, V[k])
-    assert np.allclose(Mv_b[k], Mv_s, atol=1e-9), f"batched Mv mismatch river {r}"
-    assert np.allclose(Cv_b[k], Cv_s, atol=1e-9), f"batched Cv mismatch river {r}"
+    # batched runs in float32 (the solver's dtype); single is float64
+    assert np.allclose(Mv_b[k], Mv_s, atol=1e-3), f"batched Mv mismatch river {r}"
+    assert np.allclose(Cv_b[k], Cv_s, atol=1e-3), f"batched Cv mismatch river {r}"
 print(f"  batched == single over all {len(rivers)} rivers")
 
 print("all sorted-showdown differential checks passed")

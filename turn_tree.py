@@ -16,7 +16,12 @@ from betting import build_tree, Node
 
 
 def build_turn_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
-                    first_actor=0, round_to=4):
+                    first_actor=0, round_to=4, river_fractions=None):
+    # The river round may use a leaner bet abstraction than the turn -- the turn
+    # decision is what's being studied, and each turn line spawns a whole river
+    # subtree, so trimming river sizes cuts the tree (and solve time) sharply.
+    river_fractions = fractions if river_fractions is None else river_fractions
+
     def make_chance(contrib):
         # contribs are equal at a close; carry pot and remaining stacks forward.
         turn_in = contrib[0]
@@ -24,7 +29,7 @@ def build_turn_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
         node.kind = "chance"
         node.contrib = (round(contrib[0], round_to), round(contrib[1], round_to))
         node.pot = round(base_pot + contrib[0] + contrib[1], round_to)   # pot into the river
-        node.river_root = build_tree(node.pot, stack - turn_in, fractions,
+        node.river_root = build_tree(node.pot, stack - turn_in, river_fractions,
                                      first_actor, round_to)
         return node
 

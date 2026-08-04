@@ -68,8 +68,8 @@ class TurnSolver:
             return
         A = len(node.actions)
         shape = (self.n_river, self.N, A) if river else (self.N, A)
-        self.regret[node] = np.zeros(shape)
-        self.strat[node] = np.zeros(shape)
+        self.regret[node] = np.zeros(shape, np.float32)
+        self.strat[node] = np.zeros(shape, np.float32)
         for _, ch in node.actions:
             self._alloc(ch, river)
 
@@ -146,8 +146,10 @@ class TurnSolver:
         return c0a.sum(-1), nv
 
     def train(self, iters, range0=None, range1=None):
-        self.range0 = np.ones(self.N) if range0 is None else np.asarray(range0, float)
-        self.range1 = np.ones(self.N) if range1 is None else np.asarray(range1, float)
+        self.range0 = (np.ones(self.N, np.float32) if range0 is None
+                       else np.asarray(range0, np.float32))
+        self.range1 = (np.ones(self.N, np.float32) if range1 is None
+                       else np.asarray(range1, np.float32))
         for t in range(1, iters + 1):
             self._weight = float(t)
             self._turn(self.root, self.range0, self.range1)

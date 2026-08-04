@@ -69,17 +69,17 @@ def sorted_showdown_batched(strengths_stack, card_a, card_b, V):
     cb = np.broadcast_to(np.asarray(card_b)[None, :], (R, N))
 
     bucket = np.bincount((rows * K1 + s).ravel(), weights=VV,
-                         minlength=R * K1).reshape(R, K1)
+                         minlength=R * K1).reshape(R, K1).astype(np.float32)
     total = bucket.sum(1)
-    below = np.zeros((R, K1)); below[:, 1:] = np.cumsum(bucket, 1)[:, :-1]
+    below = np.zeros((R, K1), np.float32); below[:, 1:] = np.cumsum(bucket, 1)[:, :-1]
     signed = 2.0 * below + bucket - total[:, None]
 
     m = R * 52 * K1
     bucket_c = (np.bincount(((rows * 52 + ca) * K1 + s).ravel(), weights=VV, minlength=m)
                 + np.bincount(((rows * 52 + cb) * K1 + s).ravel(), weights=VV, minlength=m)
-                ).reshape(R, 52, K1)
+                ).reshape(R, 52, K1).astype(np.float32)
     contain = bucket_c.sum(2)
-    below_c = np.zeros((R, 52, K1)); below_c[:, :, 1:] = np.cumsum(bucket_c, 2)[:, :, :-1]
+    below_c = np.zeros((R, 52, K1), np.float32); below_c[:, :, 1:] = np.cumsum(bucket_c, 2)[:, :, :-1]
     signed_c = 2.0 * below_c + bucket_c - contain[:, :, None]
 
     ri = np.arange(R)[:, None]
