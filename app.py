@@ -101,6 +101,66 @@ def solve():
         return jsonify({"error": str(e)}), 400
 
 
+# --- live river solve: chunked in a thread and polled, for a ticking counter.
+# Single job -- a new solve cancels the previous one, so threads never pile up.
+
+_river_jobs = {}
+_river_last = {"job": None}
+
+
+def _river_worker(job, board, r0c, r1c, pot, stack, fractions, target):
+    try:
+        s = Solver(board, float(pot), float(stack), tuple(fractions))
+        r0 = range_from_classes(r0c, s.combos)
+        r1 = range_from_classes(r1c, s.combos)
+        if r0.sum() <= 0 or r1.sum() <= 0:
+            job["error"] = "both players need a non-empty range"
+            job["done"] = True
+            return
+        job["actions"] = s.root.labels()
+        w = r0 / r0.sum()
+        while s._t < target and not job["cancel"]:
+            s.train(min(25, target - s._t), range0=r0, range1=r1, plus=True)  # a chunk
+            avg = s.average_strategy(s.root)
+            job["iter"] = s._t
+            job["mix"] = [round(float(x), 4) for x in (w @ avg)]
+            job["strategy"] = _root_grid(r0, s.combos, avg)
+            job["exploitability_bb"] = round(float(s.exploitability()), 3)
+        job["done"] = True
+    except Exception as e:                                          # noqa: BLE001
+        job["error"] = str(e)
+        job["done"] = True
+
+
+@app.route("/river/solve", methods=["POST"])
+def river_solve():
+    data = request.get_json(force=True)
+    board = data.get("board", [])
+    if len(board) != 5 or len(set(board)) != 5:
+        return jsonify({"error": "need exactly 5 distinct board cards"}), 400
+    if _river_last["job"] is not None:            # cancel any in-flight solve
+        _river_last["job"]["cancel"] = True
+    target = int(data.get("iters", 250))
+    jid = uuid.uuid4().hex[:8]
+    job = {"iter": 0, "done": False, "strategy": {}, "mix": [], "actions": [],
+           "exploitability_bb": None, "target": target, "cancel": False}
+    _river_jobs[jid] = job
+    _river_last["job"] = job
+    threading.Thread(target=_river_worker, daemon=True, args=(
+        job, [parse_card(c) for c in board], data["range0"], data["range1"],
+        data.get("pot", 20), data.get("stack", 80),
+        tuple(data.get("fractions", [0.33, 0.66, 1.0])), target)).start()
+    return jsonify({"id": jid, "target": target})
+
+
+@app.route("/river/progress/<jid>")
+def river_progress(jid):
+    job = _river_jobs.get(jid)
+    if job is None:
+        return jsonify({"error": "unknown job"}), 404
+    return jsonify(job)
+
+
 # --- turn solve: slow, so run in a background thread and poll for live progress -
 
 _turn_jobs = {}

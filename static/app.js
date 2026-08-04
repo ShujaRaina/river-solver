@@ -120,30 +120,36 @@ async function solve() {
   if (state.street === "turn") return solveTurn();
   const status = document.getElementById("status");
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
-  const iters = +document.getElementById("iters").value;
   const btn = document.getElementById("solve");
-  btn.disabled = true; status.textContent = `solving ${iters} iterations…`;
+  btn.disabled = true; status.textContent = "starting…";
+  let start;
   try {
-    const res = await fetch("/solve", {
+    start = await (await fetch("/river/solve", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        board: state.board,
-        range0: state.ranges[0], range1: state.ranges[1],
+        board: state.board, range0: state.ranges[0], range1: state.ranges[1],
         pot: +document.getElementById("pot").value,
         stack: +document.getElementById("stack").value,
-        iters: iters,
+        iters: +document.getElementById("iters").value,
       }),
-    });
-    const data = await res.json();
-    if (data.error) { status.textContent = "error: " + data.error; return; }
-    status.textContent = "";
-    data.iters = iters;
-    renderResult(data);
-  } catch (e) {
-    status.textContent = "request failed: " + e.message;
-  } finally {
-    btn.disabled = false;
-  }
+    })).json();
+  } catch (e) { status.textContent = "request failed: " + e.message; btn.disabled = false; return; }
+  if (start.error) { status.textContent = "error: " + start.error; btn.disabled = false; return; }
+
+  const id = start.id;                        // poll for the live ticking counter
+  const poll = async () => {
+    let d;
+    try { d = await (await fetch("/river/progress/" + id)).json(); }
+    catch (e) { status.textContent = "poll failed: " + e.message; btn.disabled = false; return; }
+    if (d.error) { status.textContent = "error: " + d.error; btn.disabled = false; return; }
+    status.textContent = d.done
+      ? `done — ${d.iter} iterations`
+      : `solving…  ${d.iter} / ${d.target} iterations`;
+    if (d.actions && d.actions.length) renderResult(d);
+    if (d.done) { btn.disabled = false; return; }
+    setTimeout(poll, 200);
+  };
+  poll();
 }
 
 async function solveTurn() {
@@ -184,7 +190,7 @@ async function solveTurn() {
 function renderResult(data) {
   document.getElementById("results").hidden = false;
   const parts = [];
-  if (data.iters != null) parts.push(`${data.iters} iterations`);
+  if (data.iter != null) parts.push(`${data.iter}${data.target ? " / " + data.target : ""} iterations`);
   if (data.exploitability_bb != null) parts.push(`exploitability ${data.exploitability_bb.toFixed(2)} bb`);
   document.getElementById("expl").textContent = parts.join("  ·  ");
 

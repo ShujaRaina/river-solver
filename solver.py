@@ -78,6 +78,7 @@ class Solver:
         self._R1 = np.empty((self.N, T), np.float32)
         self._cfv0 = np.empty((self.N, T), np.float32)
         self._cfv1 = np.empty((self.N, T), np.float32)
+        self._t = 0                        # persistent iteration count (for chunked training)
 
     # --- strategies -------------------------------------------------------
     def strategy(self, node):
@@ -203,8 +204,9 @@ class Solver:
         self.range0 = np.ones(self.N) if range0 is None else np.asarray(range0, float)
         self.range1 = np.ones(self.N) if range1 is None else np.asarray(range1, float)
         self._plus = plus
-        for t in range(1, iters + 1):
-            self._weight = float(t) if plus else 1.0
+        for _ in range(iters):
+            self._t += 1                   # persists across calls: chunked training stays correct
+            self._weight = float(self._t) if plus else 1.0
             sig = {}
             self._down(self.root, self.range0, self.range1, sig)
             self._terminal_cfvs()
