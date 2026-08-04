@@ -70,7 +70,14 @@ see the river, so river regrets are indexed by river card — the ~48× work/mem
 - **T1** `turn_tree.py` — two-round tree with the river chance node (pot/stack carried) ✅
 - **T2** `turn_solver.py` — vectorized CFR+ with the chance node (reaches batched over
   all 48 rivers). Converges: exploitability **5.4 → 0.04 bb** over 100 iters ✅
-- **T3/T4** — LP cross-check on a tiny turn instance, and performance — open.
+- **T4** `showdown_fast.py` — O(N) sorted-prefix-sum showdown (card-removal-aware,
+  batched over 48 rivers), differential-tested against `M @ v` on dry/paired/flushy
+  boards and blocked combos. Removes the 244 MB per-river matrices; the 4-size
+  abstraction now runs (~9 s/iter, was 30). More perf (batched traversal) possible.
+- **T3** — LP cross-check on a tiny turn instance — open.
+
+A 4-size turn solve (33/66/100%/all-in) needs ~1.3 GB and tens of minutes, so
+it's a "kick it off and wait" solve, not interactive like the river.
 
 Runs on a modest bet abstraction; memory scales as
 turn-close-points × 48 × combos × actions, so a full abstraction wants a lot of

@@ -27,7 +27,7 @@ import numpy as np
 from terminal import compatibility_mask
 from turn_eval import turn_strengths
 from turn_tree import build_turn_tree
-from betting import walk
+from showdown_fast import sorted_showdown_batched
 
 
 def _regret_match(reg):
@@ -49,15 +49,12 @@ class TurnSolver:
         self.chance_weight = 1.0 / (52 - len(turn_board) - 4)      # 1/44
 
         self.C = compatibility_mask(self.turn_combos).astype(np.float32)
-        M, valid = [], []
-        for r in self.rivers:
-            s = per_river[r].astype(np.float32)
-            v = (s >= 0).astype(np.float32)
-            sign = np.sign(s[:, None] - s[None, :]).astype(np.float32)
-            M.append(sign * self.C * v[:, None] * v[None, :])       # blocked -> 0
-            valid.append(v)
-        self.M_stack = np.stack(M)                                  # (n_river, N, N) f32
-        self.valid = np.stack(valid)                                # (n_river, N)   f32
+        # Showdowns use the O(N) sorted method (no per-river N*N matrix), so we
+        # keep only the per-river strengths + each combo's two cards.
+        self.strengths = np.stack([per_river[r] for r in self.rivers])   # (n_river, N)
+        self.valid = (self.strengths >= 0).astype(np.float32)            # (n_river, N)
+        self.card_a = np.array([c[0] for c in self.turn_combos])
+        self.card_b = np.array([c[1] for c in self.turn_combos])
 
         self.root = build_turn_tree(base_pot, stack, fractions, first_actor)
         self.regret, self.strat = {}, {}
@@ -76,9 +73,9 @@ class TurnSolver:
         for _, ch in node.actions:
             self._alloc(ch, river)
 
-    def _mM(self, R):
-        """M_stack @ R for a (n_river, N) reach, kept in float32 (M is exact)."""
-        return np.matmul(self.M_stack, R.astype(np.float32)[:, :, None])[:, :, 0]
+    def _showdown(self, R):
+        """(M@R, C@R) per river via the sorted-prefix-sum showdown -- no N*N matrix."""
+        return sorted_showdown_batched(self.strengths, self.card_a, self.card_b, R)
 
     # --- terminal values -------------------------------------------------
     def _fold(self, node, opp_reach, hero, C_apply):
@@ -122,9 +119,8 @@ class TurnSolver:
         if node.is_terminal():
             if node.kind == "showdown":
                 pot, stake = node.pot, node.stake
-                MR1 = self._mM(R1)
-                MR0 = self._mM(R0)
-                CR1, CR0 = R1 @ self.C, R0 @ self.C                # C symmetric
+                MR1, CR1 = self._showdown(R1)
+                MR0, CR0 = self._showdown(R0)
                 return (0.5 * pot * MR1 + (0.5 * pot - stake) * CR1,
                         0.5 * pot * MR0 + (0.5 * pot - stake) * CR0)
             return (self._fold(node, R1, 0, lambda x: x @ self.C),
@@ -188,9 +184,8 @@ class TurnSolver:
         if node.is_terminal():
             if node.kind == "showdown":
                 pot, stake = node.pot, node.stake
-                MR1 = self._mM(R1)
-                MR0 = self._mM(R0)
-                CR1, CR0 = R1 @ self.C, R0 @ self.C
+                MR1, CR1 = self._showdown(R1)
+                MR0, CR0 = self._showdown(R0)
                 return (0.5 * pot * MR1 + (0.5 * pot - stake) * CR1,
                         0.5 * pot * MR0 + (0.5 * pot - stake) * CR0)
             return (self._fold(node, R1, 0, lambda x: x @ self.C),
@@ -225,8 +220,8 @@ class TurnSolver:
         if node.is_terminal():
             if node.kind == "showdown":
                 pot, stake = node.pot, node.stake
-                MR = self._mM(Ropp)
-                return 0.5 * pot * MR + (0.5 * pot - stake) * (Ropp @ self.C)
+                MR, CR = self._showdown(Ropp)
+                return 0.5 * pot * MR + (0.5 * pot - stake) * CR
             return self._fold(node, Ropp, ex, lambda x: x @ self.C)
         if node.player == ex:
             vals = [self._br_river(ch, Ropp, ex) for _, ch in node.actions]
