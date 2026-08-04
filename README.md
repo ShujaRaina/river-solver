@@ -58,6 +58,24 @@ instead of walking one deal at a time.
   (~5×), bit-identical convergence. Still open: the O(N log N) showdown for
   turn/flop, and richer bet trees.
 
+## Turn extension
+
+Scaling up one street: turn betting → **chance (deal the river)** → river betting
+→ showdown. The new mechanism is the mid-tree chance node (the Leduc board-card
+trap, vectorized): each of the 48 rivers is weighted `1/44` with combos holding
+the river card masked on both sides, and strengths recomputed per river. Players
+see the river, so river regrets are indexed by river card — the ~48× work/memory.
+
+- **T0** `turn_eval.py` — per-river-card strengths over the 1128-combo turn universe ✅
+- **T1** `turn_tree.py` — two-round tree with the river chance node (pot/stack carried) ✅
+- **T2** `turn_solver.py` — vectorized CFR+ with the chance node (reaches batched over
+  all 48 rivers). Converges: exploitability **5.4 → 0.04 bb** over 100 iters ✅
+- **T3/T4** — LP cross-check on a tiny turn instance, and performance — open.
+
+Runs on a modest bet abstraction; memory scales as
+turn-close-points × 48 × combos × actions, so a full abstraction wants a lot of
+RAM (as every turn/flop solver does).
+
 ## Web GUI
 
 An interactive frontend: pick the 5 board cards from a 52-card grid, set each
