@@ -120,8 +120,9 @@ async function solve() {
   if (state.street === "turn") return solveTurn();
   const status = document.getElementById("status");
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
+  const iters = +document.getElementById("iters").value;
   const btn = document.getElementById("solve");
-  btn.disabled = true; status.textContent = "solving…";
+  btn.disabled = true; status.textContent = `solving ${iters} iterations…`;
   try {
     const res = await fetch("/solve", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -130,12 +131,13 @@ async function solve() {
         range0: state.ranges[0], range1: state.ranges[1],
         pot: +document.getElementById("pot").value,
         stack: +document.getElementById("stack").value,
-        iters: +document.getElementById("iters").value,
+        iters: iters,
       }),
     });
     const data = await res.json();
     if (data.error) { status.textContent = "error: " + data.error; return; }
     status.textContent = "";
+    data.iters = iters;
     renderResult(data);
   } catch (e) {
     status.textContent = "request failed: " + e.message;
@@ -181,8 +183,10 @@ async function solveTurn() {
 
 function renderResult(data) {
   document.getElementById("results").hidden = false;
-  document.getElementById("expl").textContent = data.exploitability_bb != null
-    ? `exploitability ${data.exploitability_bb.toFixed(2)} bb` : "";
+  const parts = [];
+  if (data.iters != null) parts.push(`${data.iters} iterations`);
+  if (data.exploitability_bb != null) parts.push(`exploitability ${data.exploitability_bb.toFixed(2)} bb`);
+  document.getElementById("expl").textContent = parts.join("  ·  ");
 
   const legend = document.getElementById("legend");
   legend.innerHTML = data.actions.map((a, i) =>
