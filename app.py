@@ -4,7 +4,7 @@ A tiny Flask app: serves the single-page frontend and exposes POST /solve, which
 turns a board + two 13x13 range grids into a CFR+ solve and returns the acting
 player's strategy aggregated back onto the grid (so the frontend can colour it).
 
-Run:  python app.py   ->  http://127.0.0.1:5000
+Run:  python app.py   ->  http://127.0.0.1:8000
 """
 
 import threading
@@ -172,4 +172,5 @@ def turn_progress(jid):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000, threaded=True)
+    # port 8000, not 5000: macOS uses 5000 for AirPlay Receiver (returns 403)
+    app.run(debug=True, port=8000, threaded=True)

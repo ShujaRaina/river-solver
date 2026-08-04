@@ -91,7 +91,7 @@ partial combos), and solve — the result colours P0's grid by action frequency.
 
 ```bash
 pip install flask
-python app.py                      # -> http://127.0.0.1:5000
+python app.py                      # -> http://127.0.0.1:8000
 ```
 
 Backend `app.py` (Flask) wraps the solver behind `POST /solve`; frontend under
