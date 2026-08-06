@@ -161,11 +161,10 @@ function buildGrid(player) {
   paintGrid(player);
 }
 
-// Select-first workflow: clicking/dragging SELECTS hands (adding new ones to
-// the range at full weight, keeping existing ones' weights); the Hand weight
-// slider then sets the selected hands' weight. Clicking a hand already in the
-// range just selects it (doesn't reset it); clicking outside the grids clears
-// the selection.
+// Select-first workflow: clicking/dragging only SELECTS hands -- it never
+// changes a hand's weight. The slider syncs to the selection's current weight
+// (0 for an untouched square), and moving it sets the weight (adding the hand
+// to the range once it's > 0). Clicking outside the grids clears the selection.
 function startPaint(player, label) {
   state.painting = true;
   clearSelection();
@@ -174,8 +173,7 @@ function startPaint(player, label) {
 }
 function applyPaint(player, label) {
   if (state.selection.player !== player) return;      // don't cross grids mid-stroke
-  if (!(label in state.ranges[player])) state.ranges[player][label] = 1.0;  // new -> 100%
-  state.selection.labels.add(label);                  // existing keeps its weight
+  state.selection.labels.add(label);                  // select only; weight unchanged
   markSelected(player, label, true);
   paintCell(player, label);
 }
