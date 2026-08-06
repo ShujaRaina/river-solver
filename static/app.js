@@ -3,7 +3,10 @@
 const RANKS = "AKQJT98765432";
 const SUITS = [["s", "♠", "spade"], ["h", "♥", "heart"],
                ["d", "♦", "diamond"], ["c", "♣", "club"]];
-const PALETTE = ["#3fb27f", "#e9c46a", "#f4a261", "#e76f51", "#b0202b"];
+// 7 steps so check + five bet sizes + all-in each get a distinct colour
+// (calm green -> escalating warm -> deep maroon for the biggest sizings).
+const PALETTE = ["#3fb27f", "#8ab861", "#e9c46a", "#f4a261",
+                 "#e76f51", "#c62d42", "#7a1420"];
 
 // pretty action labels: "bet33" -> "Bet 33", "allin" -> "All In"
 function displayName(a) {
@@ -18,6 +21,10 @@ function displayName(a) {
 // browser tab (re-clicking Solve cancels only my own in-flight solve, never
 // another user's on the shared deploy).
 const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+// bet sizes offered to the solver (fractions of pot); all-in is auto-added by
+// the engine, so this menu of 5 -> six actions (33/66/100/150/200/all-in).
+const BET_SIZES = [0.33, 0.66, 1.0, 1.5, 2.0];
 
 const state = {
   street: "river",           // "river" (5 cards) or "turn" (4 cards)
@@ -137,6 +144,7 @@ async function solve() {
         pot: +document.getElementById("pot").value,
         stack: +document.getElementById("stack").value,
         iters: +document.getElementById("iters").value,
+        fractions: BET_SIZES,
       }),
     })).json();
   } catch (e) { status.textContent = "request failed: " + e.message; btn.disabled = false; return; }
