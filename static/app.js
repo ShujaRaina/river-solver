@@ -426,7 +426,7 @@ function preset() {
     "66 77 88 99 TT JJ QQ KK AA " +            // 66-AA
     "A3s A4s A5s A6s A7s A8s A9s ATs AJs AQs AKs " +  // A3s-AKs
     "K9s KTs KJs KQs Q9s QTs QJs J9s JTs T9s " +      // K9s-KQs, Q9s-QJs, J9s-JTs, T9s
-    "AJo AQo AKo").split(" ");                  // AJo-AKo
+    "AJo AQo AKo KQo").split(" ");              // AJo-AKo, KQo
   const w = {};
   for (const h of full) w[h] = 1;
   for (const h of "ATo KJo K8s 55".split(" ")) w[h] = 0.75;
