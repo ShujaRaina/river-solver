@@ -10,7 +10,7 @@ is disqualified — 0.1 vCPU cannot run a CPU-bound CFR solve).
 1. Push this repo to GitHub (already at `github.com/ShujaRaina/river-solver`).
 2. In the Render dashboard: **New +  ->  Blueprint**, point it at this repo.
    Render reads `render.yaml`, builds the `Dockerfile`, and provisions the web
-   service on the `standard` plan with a health check on `/health`.
+   service on the `starter` plan with a health check on `/health`.
 3. First build takes a few minutes (pip install numpy). When it's live you get
    an HTTPS URL like `https://river-solver.onrender.com`.
 
@@ -19,11 +19,13 @@ portfolio (that's M4).
 
 ## Tier / cost
 
-- `standard` (1 vCPU / 2 GB, ~$25/mo) — the default in `render.yaml`. Matches the
-  benchmarked solve times; holds a near-node-cap tree with headroom.
-- `starter` (0.5 vCPU / 512 MB, ~$7/mo) — cheaper; solves run ~2x slower so deep
-  spots hit the 60s backstop sooner, and a max-size tree is near the 512 MB
-  ceiling. Fine for light traffic. Switch by editing `plan:` in `render.yaml`.
+- `starter` (0.5 vCPU / 512 MB, ~$7/mo) — the default in `render.yaml`. Solves
+  run ~2x slower than the benchmark times so deep spots hit the 60s backstop
+  sooner; a max-size tree (~200 MB peak) sits under the 512 MB ceiling. Fine for
+  light traffic.
+- `standard` (1 vCPU / 2 GB, ~$25/mo) — upgrade for the benchmarked solve times
+  and more headroom. Switch by editing `plan:` in `render.yaml` or in the Render
+  dashboard (no code change).
 
 Paid Render tiers are **always-on** (no scale-to-zero), so there is no cold
 start and no prewarm needed.
