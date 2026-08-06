@@ -80,6 +80,7 @@ class Solver:
         self._cfv0 = np.empty((self.N, T), np.float32)
         self._cfv1 = np.empty((self.N, T), np.float32)
         self._t = 0                        # persistent iteration count (for chunked training)
+        self._dcfr = False                 # set per-train() call; CFR+ is the default
 
     # --- strategies -------------------------------------------------------
     def strategy(self, node):
@@ -94,6 +95,27 @@ class Solver:
         total = s.sum(axis=1, keepdims=True)
         A = s.shape[1]
         return np.where(total > 0, s / np.where(total > 0, total, 1.0), 1.0 / A)
+
+    # --- regret / strategy accumulation: CFR+ (default) or Discounted CFR -----
+    # The per-iteration discount scalars (_cp, _cn, _cg) are set in train(); they
+    # depend only on the iteration count, so they're the same for every node.
+    def _accumulate_strategy(self, node, reach_p, sigma):
+        ss = self.strat_sum[node]
+        if self._dcfr:
+            ss *= self._cg                          # discount old strategy mass
+            ss += reach_p[:, None] * sigma          # add this iter at weight 1
+        else:
+            ss += self._weight * reach_p[:, None] * sigma   # CFR+ linear averaging
+
+    def _update_regret(self, node, delta):
+        R = self.regret[node]
+        if self._dcfr:
+            R *= np.where(R > 0, self._cp, self._cn)  # two-sided discount, then add
+            R += delta
+        else:
+            R += delta
+            if self._plus:
+                np.maximum(R, 0.0, out=R)             # regret-matching+ flooring
 
     # --- terminal values (per hero combo, weighted by opponent reach) -----
     def _terminal_value(self, node, opp_reach, hero):
@@ -156,7 +178,7 @@ class Solver:
         sigma = self.strategy(node)
         sig[node] = sigma
         reach_p = reach0 if p == 0 else reach1
-        self.strat_sum[node] += self._weight * reach_p[:, None] * sigma
+        self._accumulate_strategy(node, reach_p, sigma)
         for a, (_, child) in enumerate(node.actions):
             if p == 0:
                 self._down(child, reach0 * sigma[:, a], reach1, sig)
@@ -191,23 +213,33 @@ class Solver:
         c0a, c1a = np.stack(c0a, axis=1), np.stack(c1a, axis=1)
         if p == 0:
             nv0 = (sigma * c0a).sum(axis=1)
-            self.regret[node] += c0a - nv0[:, None]
-            if self._plus:
-                np.maximum(self.regret[node], 0.0, out=self.regret[node])
+            self._update_regret(node, c0a - nv0[:, None])
             return nv0, c1a.sum(axis=1)
         nv1 = (sigma * c1a).sum(axis=1)
-        self.regret[node] += c1a - nv1[:, None]
-        if self._plus:
-            np.maximum(self.regret[node], 0.0, out=self.regret[node])
+        self._update_regret(node, c1a - nv1[:, None])
         return c0a.sum(axis=1), nv1
 
-    def train(self, iters, range0=None, range1=None, plus=True):
+    def train(self, iters, range0=None, range1=None, plus=True,
+              variant="cfr+", dcfr_params=(1.5, 0.0, 2.0)):
+        """Run `iters` CFR iterations. variant="cfr+" (default, verified) uses
+        regret-matching+ with linear averaging; variant="dcfr" uses Discounted
+        CFR (Brown & Sandholm 2019) with (alpha, beta, gamma) = dcfr_params:
+        positive regrets *= t^a/(t^a+1), negative *= t^b/(t^b+1), strategy sum
+        *= (t/(t+1))^g each iteration. Defaults (1.5, 0, 2) are the paper's."""
         self.range0 = np.ones(self.N) if range0 is None else np.asarray(range0, float)
         self.range1 = np.ones(self.N) if range1 is None else np.asarray(range1, float)
         self._plus = plus
+        self._dcfr = (variant == "dcfr")
+        alpha, beta, gamma = dcfr_params
         for _ in range(iters):
             self._t += 1                   # persists across calls: chunked training stays correct
-            self._weight = float(self._t) if plus else 1.0
+            t = self._t
+            if self._dcfr:
+                self._cp = (t ** alpha) / (t ** alpha + 1.0)   # positive-regret discount
+                self._cn = (t ** beta) / (t ** beta + 1.0)     # negative-regret discount
+                self._cg = (t / (t + 1.0)) ** gamma            # strategy-sum discount
+            else:
+                self._weight = float(t) if plus else 1.0
             sig = {}
             self._down(self.root, self.range0, self.range1, sig)
             self._terminal_cfvs()
