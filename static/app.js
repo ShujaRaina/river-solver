@@ -40,10 +40,21 @@ window.addEventListener("pagehide", () => {
 // bet sizes come from the four editable % inputs (fractions of pot); all-in is
 // auto-added by the engine. Blank/out-of-range boxes are dropped; valid range
 // is 5%-300% (matches the server's fraction bounds).
+// the slider picks how many bet-size boxes are active (1-5); read those.
 function betSizes() {
-  return [...document.querySelectorAll(".betsize")]
+  const n = +document.getElementById("nsizes").value;
+  return [...document.querySelectorAll(".betsize")].slice(0, n)
     .map(el => +el.value / 100)
     .filter(f => f >= 0.05 && f <= 3.0);
+}
+
+// reflect the slider: show N size boxes, update the count, warn at 4-5 (a
+// bigger tree slows solves, especially on the small hosted box).
+function updateSizeCount() {
+  const n = +document.getElementById("nsizes").value;
+  document.querySelectorAll(".betsize").forEach((el, i) => { el.hidden = i >= n; });
+  document.getElementById("nsizes-count").textContent = `${n} bet size${n === 1 ? "" : "s"}`;
+  document.getElementById("sizes-warn").hidden = n < 4;
 }
 
 // A canonical signature of everything that defines the solve/tree (NOT iters --
@@ -334,6 +345,7 @@ for (const b of document.querySelectorAll(".clear"))
 document.getElementById("solve").onclick = solve;
 document.getElementById("stop").onclick = stopSolve;
 document.getElementById("resume").onclick = resumeSolve;
+document.getElementById("nsizes").oninput = updateSizeCount;
 for (const r of document.querySelectorAll('input[name="street"]')) {
   r.onchange = () => {
     state.street = r.value;
@@ -357,3 +369,4 @@ preset();
 buildBoard();
 buildGrid(0);
 buildGrid(1);
+updateSizeCount();

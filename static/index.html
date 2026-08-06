@@ -50,14 +50,19 @@
       <label>Pot <input type="number" id="pot" value="20" min="1" /></label>
       <label>Stack <input type="number" id="stack" value="80" min="1" /></label>
       <label>Iterations <input type="number" id="iters" value="1000" min="20" max="3000" step="10" /></label>
-      <label>Bet sizes (% pot)
+      <div class="sizes-control">
+        <label for="nsizes">Bet sizes (% pot)</label>
+        <input type="range" id="nsizes" class="nsize-slider" min="1" max="5" value="3" />
+        <span id="nsizes-count" class="nsize-count">3 bet sizes</span>
         <span class="betsizes">
           <input type="number" class="betsize" value="33" min="5" max="300" step="1" />
           <input type="number" class="betsize" value="66" min="5" max="300" step="1" />
           <input type="number" class="betsize" value="100" min="5" max="300" step="1" />
           <input type="number" class="betsize" value="150" min="5" max="300" step="1" />
+          <input type="number" class="betsize" value="200" min="5" max="300" step="1" />
         </span>
-      </label>
+        <div id="sizes-warn" class="warn" hidden>⚠ 4–5 bet sizes enlarge the game tree and can slow solves noticeably.</div>
+      </div>
       <button id="solve" class="solve">Solve</button>
       <button id="stop" class="solve btn-stop" disabled>Stop</button>
       <button id="resume" class="solve btn-resume" disabled>Resume</button>

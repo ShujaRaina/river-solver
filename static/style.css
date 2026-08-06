@@ -96,8 +96,13 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
   padding: 9px 22px; font-weight: 700; cursor: pointer; font-size: 14px;
 }
 .solve:disabled { opacity: .5; cursor: default; }
+.sizes-control { display: flex; flex-direction: column; gap: 4px; }
+.nsize-slider { accent-color: #4c9be8; width: 150px; }
+.nsize-count { color: var(--muted); font-size: 12px; }
+.warn { color: #e9c46a; font-size: 12px; max-width: 230px; line-height: 1.35; }
 .betsizes { display: inline-flex; gap: 4px; }
 .betsize { width: 3.4em; }
+.betsize[hidden] { display: none; }
 .solve.btn-stop { background: transparent; color: #e5484d; border: 1px solid #e5484d; }
 .solve.btn-resume { background: transparent; color: #3fb27f; border: 1px solid #3fb27f; }
 .status { color: var(--muted); }
