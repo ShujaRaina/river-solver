@@ -419,12 +419,20 @@ for (const r of document.querySelectorAll('input[name="street"]')) {
 }
 
 // ---- defaults so Solve works immediately ----------------------------------
+// Both players start with the same range (weights are frequencies 0-1).
 function preset() {
   state.board = ["As", "Kd", "7s", "2c", "9h"];
-  const r0 = "AA KK QQ AKs AQs AJs KQs KJs QJs JTs T9s 99 88 77 A5s A4s".split(" ");
-  const r1 = "AA KK 99 77 AKs AKo AQo AJo KQo QJs JTs T9s T8s 54s".split(" ");
-  for (const c of r0) state.ranges[0][c] = 1;
-  for (const c of r1) state.ranges[1][c] = 1;
+  const full = (
+    "66 77 88 99 TT JJ QQ KK AA " +            // 66-AA
+    "A3s A4s A5s A6s A7s A8s A9s ATs AJs AQs AKs " +  // A3s-AKs
+    "K9s KTs KJs KQs Q9s QTs QJs J9s JTs T9s " +      // K9s-KQs, Q9s-QJs, J9s-JTs, T9s
+    "AJo AQo AKo").split(" ");                  // AJo-AKo
+  const w = {};
+  for (const h of full) w[h] = 1;
+  for (const h of "ATo KJo K8s 55".split(" ")) w[h] = 0.75;
+  for (const h of "QJo K7s T8s 98s 44".split(" ")) w[h] = 0.5;
+  for (const h of "K6s 87s 76s 65s 33 22".split(" ")) w[h] = 0.25;
+  state.ranges = [{ ...w }, { ...w }];
 }
 
 preset();
