@@ -1,0 +1,33 @@
+# Render Blueprint for the river solver (M2). Deploy: push this repo, then in
+# the Render dashboard "New +" -> "Blueprint" and point it at this repo. Render
+# builds the Dockerfile and gives an HTTPS URL. Paid tiers are always-on (no
+# cold start), so no prewarm is needed.
+#
+# TIER: `standard` (1 vCPU / 2 GB, ~$25/mo) is the safe default for the
+# "rely on the 60s backstop" model -- a single vCPU matches the benchmarked
+# solve times, and 2 GB comfortably holds a near-node-cap tree. To cut cost,
+# switch `plan` to `starter` (0.5 vCPU / 512 MB, ~$7/mo): solves run ~2x slower
+# (so deep spots hit the 60s backstop sooner) and a max-size tree is close to
+# the 512 MB ceiling -- fine for light traffic, tighter under a burst.
+services:
+  - type: web
+    name: river-solver
+    runtime: docker
+    plan: standard
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Pin concurrency: Render containers can SEE more cores than the vCPU you
+      # are allocated, so the cpu-count default in config.py would oversubscribe.
+      # Each solve is BLAS-capped to 1 core, so 1 concurrent solve per vCPU.
+      - key: SOLVER_MAX_CONCURRENT
+        value: "1"          # set to "2" on `standard` only if you accept slower solves
+      # The rest inherit config.py defaults; override here to tune without a redeploy.
+      - key: SOLVER_MAX_ITERS
+        value: "1500"
+      - key: SOLVER_TIMEOUT_S
+        value: "60"
+      - key: SOLVER_MAX_TREE_NODES
+        value: "5000"
+      - key: SOLVER_RATE_LIMIT
+        value: "10 per minute"

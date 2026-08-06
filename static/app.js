@@ -14,6 +14,11 @@ function displayName(a) {
   return a;
 }
 
+// stable per-page id so the server scopes "cancel my previous solve" to this
+// browser tab (re-clicking Solve cancels only my own in-flight solve, never
+// another user's on the shared deploy).
+const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 const state = {
   street: "river",           // "river" (5 cards) or "turn" (4 cards)
   board: [],                 // card strings, e.g. "As"
@@ -127,6 +132,7 @@ async function solve() {
     start = await (await fetch("/river/solve", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        client: CLIENT_ID,
         board: state.board, range0: state.ranges[0], range1: state.ranges[1],
         pot: +document.getElementById("pot").value,
         stack: +document.getElementById("stack").value,
@@ -142,7 +148,9 @@ async function solve() {
     try { d = await (await fetch("/river/progress/" + id)).json(); }
     catch (e) { status.textContent = "poll failed: " + e.message; btn.disabled = false; return; }
     if (d.error) { status.textContent = "error: " + d.error; btn.disabled = false; return; }
-    status.textContent = d.done
+    status.textContent = d.timeout
+      ? `stopped at time limit — ${d.iter} iterations (spot too deep to fully converge)`
+      : d.done
       ? `done — ${d.iter} iterations`
       : `solving…  ${d.iter} / ${d.target} iterations`;
     if (d.actions && d.actions.length) renderResult(d);

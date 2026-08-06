@@ -167,7 +167,7 @@ _solve_slots = threading.Semaphore(config.MAX_CONCURRENT_SOLVES)
 # evicted once finished/old so the store can't grow unbounded (R-DEP-6).
 
 _river_jobs = OrderedDict()
-_river_last = {"job": None}
+_river_last = {}                 # client token -> that client's latest job
 _jobs_lock = threading.Lock()
 
 
@@ -187,6 +187,10 @@ def _evict_jobs():
         victim = next((j for j in _river_jobs if _river_jobs[j].get("done")),
                       next(iter(_river_jobs)))
         del _river_jobs[victim]
+    # prune client->job pointers whose job is gone or finished
+    for tok in [t for t, j in _river_last.items()
+                if j.get("done") or id(j) not in {id(x) for x in _river_jobs.values()}]:
+        del _river_last[tok]
 
 
 def _root_grid(acting_range, combos, avg):
@@ -268,15 +272,24 @@ def river_solve():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
+    # A client token scopes "cancel my previous solve" to one browser, so
+    # re-clicking Solve doesn't stack solves WITHOUT one user cancelling
+    # another's in-flight solve. Absent/blank token -> no cancel (independent).
+    raw_tok = request.get_json(silent=True) or {}
+    token = raw_tok.get("client")
+    token = token if isinstance(token, str) and 0 < len(token) <= 64 else None
+
     with _jobs_lock:
-        if _river_last["job"] is not None:        # cancel any in-flight solve
-            _river_last["job"]["cancel"] = True
+        prev = _river_last.get(token) if token else None
+        if prev is not None and not prev.get("done"):
+            prev["cancel"] = True                 # cancel only THIS client's solve
         jid = uuid.uuid4().hex[:8]
         job = {"iter": 0, "done": False, "strategy": {}, "mix": [], "actions": [],
                "exploitability_bb": None, "target": params["iters"],
                "cancel": False, "_ts": _monotonic()}
         _river_jobs[jid] = job
-        _river_last["job"] = job
+        if token:
+            _river_last[token] = job
         _evict_jobs()
 
     threading.Thread(target=_river_worker, daemon=True, args=(
