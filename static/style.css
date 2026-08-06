@@ -84,8 +84,9 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 .cell.on { color: #fff; }
 .cell.selected { outline: 2px solid #fff; outline-offset: -2px; z-index: 2; }
 .cell span { position: relative; z-index: 1; }
-/* result cells show stacked action bars */
-.cell .bars { position: absolute; inset: 0; display: flex; z-index: 0; }
+/* result cells: a top-anchored band whose HEIGHT is the hand's input weight,
+   split left-to-right into action-coloured segments (widths = strategy freqs) */
+.cell .bars { position: absolute; top: 0; left: 0; right: 0; display: flex; z-index: 0; }
 .cell .bars i { height: 100%; }
 
 /* controls */

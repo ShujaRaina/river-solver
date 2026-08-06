@@ -374,9 +374,14 @@ function renderResult(data) {
       c.className = "cell" + (row === col ? " pair" : "");
       const strat = data.strategy[label];
       if (strat) {
+        // fill height = the hand's input weight (fraction of it reaching the
+        // river) from the acting player's range; inside that top band, the
+        // strategy splits left-to-right by action.
+        const player = data.root_player ?? 0;
+        const weight = (state.ranges[player] && state.ranges[player][label]) || 0;
         const bars = strat.map((f, i) =>
           `<i style="width:${f * 100}%;background:${actionColor(data.actions[i], i)}"></i>`).join("");
-        c.innerHTML = `<div class="bars">${bars}</div><span>${label}</span>`;
+        c.innerHTML = `<div class="bars" style="height:${weight * 100}%">${bars}</div><span>${label}</span>`;
         c.classList.add("on");
       } else {
         c.innerHTML = `<span>${label}</span>`;

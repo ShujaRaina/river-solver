@@ -256,6 +256,7 @@ def _river_worker(job, target, board=None, r0c=None, r1c=None,
                 return
             job["_solver"], job["_r0"], job["_r1"] = s, r0, r1
             job["actions"] = s.root.labels()
+            job["root_player"] = s.root.player      # whose range weights the grid uses
         else:                                       # resume: reuse the solver
             r0, r1 = job["_r0"], job["_r1"]
         _run_training(job, s, r0, r1, target)
