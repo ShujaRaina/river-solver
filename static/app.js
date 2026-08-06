@@ -37,9 +37,14 @@ window.addEventListener("pagehide", () => {
   navigator.sendBeacon("/river/cancel", JSON.stringify({ client: CLIENT_ID }));
 });
 
-// bet sizes offered to the solver (fractions of pot); all-in is auto-added by
-// the engine, so this menu of 3 -> four actions (33/66/100/all-in).
-const BET_SIZES = [0.33, 0.66, 1.0];
+// bet sizes come from the four editable % inputs (fractions of pot); all-in is
+// auto-added by the engine. Blank/out-of-range boxes are dropped; valid range
+// is 5%-300% (matches the server's fraction bounds).
+function betSizes() {
+  return [...document.querySelectorAll(".betsize")]
+    .map(el => +el.value / 100)
+    .filter(f => f >= 0.05 && f <= 3.0);
+}
 
 const state = {
   street: "river",           // "river" (5 cards) or "turn" (4 cards)
@@ -157,6 +162,7 @@ async function solve() {
   if (state.street === "turn") return solveTurn();
   const status = document.getElementById("status");
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
+  if (!betSizes().length) { status.textContent = "enter at least one bet size (5–300%)"; return; }
   setSolving(true); status.textContent = "starting…";
   let start;
   try {
@@ -168,7 +174,7 @@ async function solve() {
         pot: +document.getElementById("pot").value,
         stack: +document.getElementById("stack").value,
         iters: +document.getElementById("iters").value,
-        fractions: BET_SIZES,
+        fractions: betSizes(),
       }),
     })).json();
   } catch (e) { status.textContent = "request failed: " + e.message; state.resumable = false; setSolving(false); return; }
