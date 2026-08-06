@@ -98,15 +98,17 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 }
 .solve:disabled { opacity: .5; cursor: default; }
 .sizes-control { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.sizes-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.slider-wrap { display: inline-flex; align-items: center; gap: 8px; }
-.slider-end { color: var(--muted); font-size: 12px; }
+.sizes-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.slider-group { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
 /* override the generic .controls input {width:70px} for the slider + size boxes */
 .controls input.nsize-slider { width: 260px; accent-color: #4c9be8; padding: 0; border: none; background: none; }
-.nsize-count { color: var(--muted); font-size: 12px; min-width: 74px; }
-.warn { color: #e9c46a; font-size: 12px; max-width: 420px; line-height: 1.35; }
-.betsizes { display: inline-flex; gap: 4px; }
-.controls input.betsize { width: 3.4em; }
+.nsize-count { color: var(--muted); font-size: 12px; }
+/* always reserve the warning's space (toggle visibility, not display) so the
+   panel doesn't grow/shift when it appears at 4-5 sizes */
+.warn { color: #e9c46a; font-size: 12px; max-width: 460px; line-height: 1.35;
+  min-height: 1.35em; visibility: hidden; }
+.betsizes { display: inline-flex; gap: 5px; }
+.controls input.betsize { width: 4.8em; }
 .betsize[hidden] { display: none; }
 .solve.btn-stop { background: transparent; color: #e5484d; border: 1px solid #e5484d; }
 .solve.btn-resume { background: transparent; color: #3fb27f; border: 1px solid #3fb27f; }

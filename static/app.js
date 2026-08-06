@@ -54,7 +54,8 @@ function updateSizeCount() {
   const n = +document.getElementById("nsizes").value;
   document.querySelectorAll(".betsize").forEach((el, i) => { el.hidden = i >= n; });
   document.getElementById("nsizes-count").textContent = `${n} bet size${n === 1 ? "" : "s"}`;
-  document.getElementById("sizes-warn").hidden = n < 4;
+  // toggle visibility (not display) so the warning's space is always reserved
+  document.getElementById("sizes-warn").style.visibility = n >= 4 ? "visible" : "hidden";
 }
 
 // A canonical signature of everything that defines the solve/tree (NOT iters --
