@@ -38,8 +38,8 @@ window.addEventListener("pagehide", () => {
 });
 
 // bet sizes offered to the solver (fractions of pot); all-in is auto-added by
-// the engine, so this menu of 4 -> five actions (33/66/100/200/all-in).
-const BET_SIZES = [0.33, 0.66, 1.0, 2.0];
+// the engine, so this menu of 3 -> four actions (33/66/100/all-in).
+const BET_SIZES = [0.33, 0.66, 1.0];
 
 const state = {
   street: "river",           // "river" (5 cards) or "turn" (4 cards)
