@@ -155,6 +155,7 @@ function buildGrid(player) {
       c.innerHTML = `<div class="fill"></div><span>${label}</span>`;
       c.addEventListener("mousedown", e => { e.preventDefault(); startPaint(player, label); });
       c.addEventListener("mouseenter", () => { if (state.painting) applyPaint(player, label); });
+      c.addEventListener("dblclick", e => { e.preventDefault(); toggleFull(player, label); });
       grid.appendChild(c);
     }
   }
@@ -176,6 +177,18 @@ function applyPaint(player, label) {
   state.selection.labels.add(label);                  // select only; weight unchanged
   markSelected(player, label, true);
   paintCell(player, label);
+}
+// double-click toggles a square: empty -> 100%, any fill -> 0% (removed). It
+// also makes the square the active single selection so the slider tracks it.
+function toggleFull(player, label) {
+  if ((state.ranges[player][label] || 0) > 0) delete state.ranges[player][label];
+  else state.ranges[player][label] = 1.0;
+  clearSelection();
+  state.selection.player = player;
+  state.selection.labels.add(label);
+  markSelected(player, label, true);
+  paintCell(player, label);
+  syncWeightSlider();
 }
 function clearSelection() {
   const { player, labels } = state.selection;

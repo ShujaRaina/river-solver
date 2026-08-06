@@ -74,7 +74,7 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
   background: #0c1116; border: 1px solid var(--line);
   font-size: 9px; font-weight: 600; color: var(--muted);
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; overflow: hidden;
+  cursor: pointer; overflow: hidden; user-select: none;
 }
 .cell.pair { border-color: #3a4657; }
 .cell .fill {
