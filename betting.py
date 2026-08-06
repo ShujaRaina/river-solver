@@ -58,17 +58,38 @@ class Node:
         return [lab for lab, _ in self.actions]
 
 
+class TreeTooLarge(ValueError):
+    """Betting tree exceeded the node budget (deep SPR / too many sizes).
+
+    Raised DURING construction -- deep-stack trees grow to millions of nodes
+    and would OOM before a post-hoc count could catch them, so we abort as
+    soon as the running node count crosses the cap.
+    """
+
+
 def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
-               first_actor=0, round_to=4, on_close=None):
+               first_actor=0, round_to=4, on_close=None, max_nodes=None):
     """Build one betting round. When betting closes (a call, or check-check)
     without a fold, `on_close(contrib)` decides the continuation -- a showdown
-    terminal by default, or (for the turn) a chance node into a river round."""
+    terminal by default, or (for the turn) a chance node into a river round.
+
+    `max_nodes` (if set) aborts construction with TreeTooLarge once that many
+    nodes have been created -- a DoS guard for deep-stack / many-size spots."""
     eps = 1e-9
     R = lambda x: round(x, round_to)
+    n_built = [0]
+
+    def _count():
+        n_built[0] += 1
+        if max_nodes is not None and n_built[0] > max_nodes:
+            raise TreeTooLarge(
+                f"betting tree exceeds {max_nodes} nodes "
+                f"(stack/pot too deep or too many bet sizes)")
 
     def showdown(contrib):
         # reached only after equalized betting, so contrib[0] == contrib[1].
         # Derive pot from the rounded contribs so pot == dead money + contribs exactly.
+        _count()
         rc0, rc1 = R(contrib[0]), R(contrib[1])
         n = Node()
         n.kind = "showdown"
@@ -78,6 +99,7 @@ def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
         return n
 
     def fold(contrib, folder):
+        _count()
         rc0, rc1 = R(contrib[0]), R(contrib[1])
         n = Node()
         n.kind = "fold"
@@ -89,6 +111,7 @@ def build_tree(base_pot=20.0, stack=80.0, fractions=(0.33, 0.66),
     close = on_close or showdown          # what a closed round leads to
 
     def build(contrib, to_act, prev_checked):
+        _count()
         other = 1 - to_act
         to_call = contrib[other] - contrib[to_act]
         remaining = stack - contrib[to_act]

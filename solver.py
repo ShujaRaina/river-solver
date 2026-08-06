@@ -36,7 +36,7 @@ from betting import build_tree, walk
 
 class Solver:
     def __init__(self, board, base_pot=20.0, stack=80.0,
-                 fractions=(0.33, 0.66), first_actor=0):
+                 fractions=(0.33, 0.66), first_actor=0, max_nodes=None):
         self.combos, strengths = board_strengths(board)
         self.strengths = np.asarray(strengths)
         self.N = len(self.combos)
@@ -44,7 +44,8 @@ class Solver:
         self.M = showdown_matrix(self.combos, strengths).astype(np.float32)
         self.C = compatibility_mask(self.combos).astype(np.float32)
         self.base_pot = base_pot
-        self.root = build_tree(base_pot, stack, fractions, first_actor)
+        self.root = build_tree(base_pot, stack, fractions, first_actor,
+                               max_nodes=max_nodes)
 
         self.regret, self.strat_sum = {}, {}
         for n in walk(self.root):

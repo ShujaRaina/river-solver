@@ -1,2 +1,4 @@
 numpy>=1.26
-flask>=2.0        # web GUI (app.py); the solver core is numpy-only
+flask>=2.0          # web GUI (app.py); the solver core is numpy-only
+flask-limiter>=3.5  # per-IP rate limiting on the solve endpoint
+gunicorn>=21.2      # production WSGI server (single worker; see Dockerfile)
