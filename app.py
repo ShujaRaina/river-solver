@@ -31,7 +31,7 @@ import numpy as np
 from flask import Flask, request, jsonify, send_from_directory
 
 import config
-from cards import parse_card
+from cards import parse_card, card_str
 from solver import Solver
 from betting import TreeTooLarge
 from ranges import range_from_classes, _expand
@@ -359,6 +359,41 @@ def river_cancel():
             if job is not None and not job.get("done"):
                 job["cancel"] = True
     return ("", 204)
+
+
+def _fmt_combo(a, b):
+    """Format a combo's two cards as 'As Kd', higher rank first."""
+    sa, sb = card_str(a), card_str(b)
+    if RANKS.index(sa[0]) > RANKS.index(sb[0]):
+        sa, sb = sb, sa
+    return f"{sa} {sb}"
+
+
+@app.route("/river/combos/<jid>")
+def river_combos(jid):
+    """Per-combo breakdown of one hand class (e.g. AKo) for the current solve:
+    each specific combo with its input weight and current average strategy.
+    Reads the job's kept solver, so it works during and after solving."""
+    job = _river_jobs.get(jid)
+    if job is None or job.get("_solver") is None:
+        return jsonify({"error": "no solve to inspect"}), 404
+    s = job["_solver"]
+    rng = job["_r0"] if s.root.player == 0 else job["_r1"]
+    try:
+        want = _expand(request.args.get("cls", ""))
+    except Exception:                                       # noqa: BLE001
+        return jsonify({"error": "unknown hand class"}), 400
+    avg = s.average_strategy(s.root)
+    index = {c: i for i, c in enumerate(s.combos)}
+    combos = []
+    for combo in want:
+        i = index.get(combo)
+        if i is None:
+            continue                                        # board blocks this combo
+        combos.append({"combo": _fmt_combo(*combo),
+                       "weight": round(float(rng[i]), 4),
+                       "strategy": [round(float(x), 4) for x in avg[i]]})
+    return jsonify({"actions": s.root.labels(), "combos": combos})
 
 
 @app.route("/river/progress/<jid>")

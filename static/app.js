@@ -95,6 +95,7 @@ const state = {
   currentJob: null,          // id of the active/last solve (for Stop/Resume)
   resumable: false,          // last job kept a resumable solver
   solveSignature: null,      // inputs the current solver was built for
+  comboLabel: null,          // hand class whose per-combo view is open
 };
 
 function slotCount() { return state.street === "turn" ? 4 : 5; }
@@ -244,6 +245,7 @@ async function solve() {
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
   if (!betSizes().length) { status.textContent = "enter at least one bet size (5–300%)"; return; }
   state.solveSignature = solveSignature();     // remember what this solve is for
+  document.getElementById("combo-view").hidden = true; state.comboLabel = null;  // stale
   setSolving(true); status.textContent = "starting…";
   let start;
   try {
@@ -281,7 +283,12 @@ function pollJob(id) {
       ? `${reached ? "done" : "stopped"} — ${d.iter} iterations`
       : `solving…  ${d.iter} / ${d.target} iterations`;
     if (d.actions && d.actions.length) renderResult(d);
-    if (d.done) { state.resumable = !!d.resumable; setSolving(false); return; }
+    if (d.done) {
+      state.resumable = !!d.resumable; setSolving(false);
+      if (state.comboLabel && !document.getElementById("combo-view").hidden)
+        renderComboView(state.comboLabel);        // refresh combos to final values
+      return;
+    }
     setTimeout(poll, 200);
   };
   poll();
@@ -383,12 +390,53 @@ function renderResult(data) {
           `<i style="width:${f * 100}%;background:${actionColor(data.actions[i], i)}"></i>`).join("");
         c.innerHTML = `<div class="bars" style="height:${weight * 100}%">${bars}</div><span>${label}</span>`;
         c.classList.add("on");
+        c.style.cursor = "pointer";
+        c.onclick = () => onComboClick(label);
       } else {
         c.innerHTML = `<span>${label}</span>`;
       }
       grid.appendChild(c);
     }
   }
+}
+
+// ---- per-combo view (click a result class) --------------------------------
+function onComboClick(label) {
+  const view = document.getElementById("combo-view");
+  if (state.comboLabel === label && !view.hidden) {   // click again to close
+    view.hidden = true; state.comboLabel = null; return;
+  }
+  renderComboView(label);
+}
+
+async function renderComboView(label) {
+  if (!state.currentJob) return;
+  state.comboLabel = label;
+  const view = document.getElementById("combo-view");
+  let d;
+  try { d = await (await fetch(`/river/combos/${state.currentJob}?cls=${encodeURIComponent(label)}`)).json(); }
+  catch (e) { return; }
+  if (d.error || !d.combos || !d.combos.length) { view.hidden = true; return; }
+
+  // grid shape by class type: pair 2x3 (6), suited 2x2 (4), offsuit 3x4 (12)
+  const isPair = label.length === 2;
+  const isSuited = label.endsWith("s");
+  const cols = isPair ? 3 : isSuited ? 2 : 4;
+  const total = isPair ? 6 : isSuited ? 4 : 12;
+
+  const cells = d.combos.map(cb => {
+    const bars = cb.strategy.map((f, i) =>
+      `<i style="width:${f * 100}%;background:${actionColor(d.actions[i], i)}"></i>`).join("");
+    return `<div class="cell on"><div class="bars" style="height:${cb.weight * 100}%">${bars}</div>` +
+           `<span>${cb.combo}</span></div>`;
+  });
+  while (cells.length < total) cells.push(`<div class="cell"></div>`);   // board-blocked -> empty
+  view.innerHTML =
+    `<div class="combo-title">${label} — ${d.combos.length} combo${d.combos.length === 1 ? "" : "s"}` +
+    ` <span class="combo-close">✕ close</span></div>` +
+    `<div class="combo-grid" style="grid-template-columns:repeat(${cols},64px)">${cells.join("")}</div>`;
+  view.querySelector(".combo-close").onclick = () => { view.hidden = true; state.comboLabel = null; };
+  view.hidden = false;
 }
 
 // ---- wiring ---------------------------------------------------------------

@@ -88,6 +88,13 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
    split left-to-right into action-coloured segments (widths = strategy freqs) */
 .cell .bars { position: absolute; top: 0; left: 0; right: 0; display: flex; z-index: 0; }
 .cell .bars i { height: 100%; }
+/* per-combo view */
+.combo-view { margin-top: 14px; }
+.combo-title { color: var(--muted); font-size: 13px; margin-bottom: 6px;
+  display: flex; gap: 12px; align-items: center; }
+.combo-close { cursor: pointer; color: var(--accent); font-size: 12px; }
+.combo-grid { display: grid; gap: 5px; }
+.combo-grid .cell { font-size: 11px; aspect-ratio: 1 / 1; }
 
 /* controls */
 .controls { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
