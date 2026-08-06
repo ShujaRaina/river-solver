@@ -78,7 +78,7 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 }
 .cell.pair { border-color: #3a4657; }
 .cell .fill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  position: absolute; top: 0; left: 0; right: 0; height: 0;
   background: var(--accent); z-index: 0;
 }
 .cell.on { color: #fff; }

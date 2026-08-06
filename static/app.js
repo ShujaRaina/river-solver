@@ -220,8 +220,8 @@ function paintCell(player, label) {
   const cell = document.querySelector(`#grid-${player} .cell[data-label="${label}"]`);
   const w = state.ranges[player][label] || 0;
   cell.classList.toggle("on", w > 0);
-  // fill left-to-right by weight (like PioSolver / PokerCruncher), not by opacity
-  cell.querySelector(".fill").style.width = (w * 100) + "%";
+  // fill top-to-bottom by weight (matches the output range display)
+  cell.querySelector(".fill").style.height = (w * 100) + "%";
   cell.querySelector(".fill").style.background = player === 0 ? "#4c9be8" : "#e35d5d";
 }
 function paintGrid(player) {
