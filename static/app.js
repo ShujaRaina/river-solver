@@ -5,8 +5,14 @@ const SUITS = [["s", "♠", "spade"], ["h", "♥", "heart"],
                ["d", "♦", "diamond"], ["c", "♣", "club"]];
 // 7 steps so check + five bet sizes + all-in each get a distinct colour
 // (calm green -> escalating warm -> deep maroon for the biggest sizings).
-const PALETTE = ["#3fb27f", "#8ab861", "#e9c46a", "#f4a261",
-                 "#e76f51", "#c62d42", "#7a1420"];
+// check/fold green, then bets escalate yellow -> orange -> red; all-in is
+// always a distinct dark red (via actionColor), so it reads the same at any
+// number of sizes.
+const PALETTE = ["#3fb27f", "#e9c46a", "#f4a261", "#e76f51", "#c62d42", "#a11a2b"];
+const ALLIN_COLOR = "#5c0a14";
+function actionColor(action, i) {
+  return action === "allin" ? ALLIN_COLOR : PALETTE[i % PALETTE.length];
+}
 
 // pretty action labels: "bet33" -> "Bet 33", "allin" -> "All In"
 function displayName(a) {
@@ -356,7 +362,7 @@ function renderResult(data) {
 
   const legend = document.getElementById("legend");
   legend.innerHTML = data.actions.map((a, i) =>
-    `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>` +
+    `<span><i style="background:${actionColor(a, i)}"></i>` +
     `${displayName(a)} ${Math.round(data.mix[i] * 100)}%</span>`).join("");
 
   const grid = document.getElementById("grid-result");
@@ -369,7 +375,7 @@ function renderResult(data) {
       const strat = data.strategy[label];
       if (strat) {
         const bars = strat.map((f, i) =>
-          `<i style="width:${f * 100}%;background:${PALETTE[i % PALETTE.length]}"></i>`).join("");
+          `<i style="width:${f * 100}%;background:${actionColor(data.actions[i], i)}"></i>`).join("");
         c.innerHTML = `<div class="bars">${bars}</div><span>${label}</span>`;
         c.classList.add("on");
       } else {
