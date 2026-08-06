@@ -85,7 +85,6 @@ const state = {
   ranges: [{}, {}],          // ranges[player] = { "AKs": weight, ... }
   paintWeight: 1.0,
   painting: false,
-  paintMode: "paint",        // or "erase"
   selection: { player: null, labels: new Set() },  // hands the weight slider edits
   currentJob: null,          // id of the active/last solve (for Stop/Resume)
   resumable: false,          // last job kept a resumable solver
@@ -162,30 +161,22 @@ function buildGrid(player) {
   paintGrid(player);
 }
 
-// Select-first workflow: painting SELECTS hands (into the range at full weight)
-// and makes them the active selection; the Hand weight slider then sets the
-// weight of that selection. Each new stroke starts a fresh selection at 100%.
+// Select-first workflow: clicking/dragging SELECTS hands (adding new ones to
+// the range at full weight, keeping existing ones' weights); the Hand weight
+// slider then sets the selected hands' weight. Clicking a hand already in the
+// range just selects it (doesn't reset it); clicking outside the grids clears
+// the selection.
 function startPaint(player, label) {
   state.painting = true;
-  state.paintMode = state.ranges[player][label] ? "erase" : "paint";
-  if (state.paintMode === "paint") {
-    clearSelection();
-    state.selection.player = player;
-    resetHandWeight();                 // a fresh selection starts full (100%)
-  }
+  clearSelection();
+  state.selection.player = player;
   applyPaint(player, label);
 }
 function applyPaint(player, label) {
-  if (state.paintMode === "paint") {
-    if (state.selection.player !== player) return;   // don't cross grids mid-stroke
-    state.ranges[player][label] = state.paintWeight;
-    state.selection.labels.add(label);
-    markSelected(player, label, true);
-  } else {
-    delete state.ranges[player][label];
-    state.selection.labels.delete(label);
-    markSelected(player, label, false);
-  }
+  if (state.selection.player !== player) return;      // don't cross grids mid-stroke
+  if (!(label in state.ranges[player])) state.ranges[player][label] = 1.0;  // new -> 100%
+  state.selection.labels.add(label);                  // existing keeps its weight
+  markSelected(player, label, true);
   paintCell(player, label);
 }
 function clearSelection() {
@@ -197,10 +188,16 @@ function markSelected(player, label, on) {
   const cell = document.querySelector(`#grid-${player} .cell[data-label="${label}"]`);
   if (cell) cell.classList.toggle("selected", on);
 }
-function resetHandWeight() {
-  state.paintWeight = 1.0;
-  document.getElementById("weight").value = 100;
-  document.getElementById("weight-label").textContent = "100%";
+// reflect the selection's weight on the slider so adjusting starts from the
+// current value (uniform selection -> that weight; mixed -> 100%).
+function syncWeightSlider() {
+  const { player, labels } = state.selection;
+  if (player == null || labels.size === 0) return;
+  const ws = [...labels].map(l => state.ranges[player][l] ?? 0);
+  const w = ws.every(x => x === ws[0]) ? ws[0] : 1.0;
+  state.paintWeight = w;
+  document.getElementById("weight").value = Math.round(w * 100);
+  document.getElementById("weight-label").textContent = Math.round(w * 100) + "%";
 }
 function paintCell(player, label) {
   const cell = document.querySelector(`#grid-${player} .cell[data-label="${label}"]`);
@@ -373,7 +370,16 @@ function renderResult(data) {
 }
 
 // ---- wiring ---------------------------------------------------------------
-document.addEventListener("mouseup", () => { state.painting = false; });
+document.addEventListener("mouseup", () => {
+  if (state.painting) syncWeightSlider();   // reflect the finished selection's weight
+  state.painting = false;
+});
+// clicking outside the range grids clears the selection -- but not on the Hand
+// weight control, which is the tool used to edit the current selection.
+document.addEventListener("mousedown", e => {
+  if (e.target.closest("#grid-0, #grid-1, .weight-row")) return;
+  clearSelection();
+});
 document.getElementById("weight").addEventListener("input", e => {
   state.paintWeight = e.target.value / 100;
   document.getElementById("weight-label").textContent = e.target.value + "%";
