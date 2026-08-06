@@ -78,7 +78,8 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 }
 .cell.pair { border-color: #3a4657; }
 .cell .fill {
-  position: absolute; inset: 0; background: var(--accent); opacity: 0; z-index: 0;
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: var(--accent); z-index: 0;
 }
 .cell.on { color: #fff; }
 .cell span { position: relative; z-index: 1; }
