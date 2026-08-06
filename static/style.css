@@ -96,6 +96,7 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
   padding: 9px 22px; font-weight: 700; cursor: pointer; font-size: 14px;
 }
 .solve:disabled { opacity: .5; cursor: default; }
+.solve.btn2 { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
 .status { color: var(--muted); }
 
 .result-head { display: flex; justify-content: space-between; align-items: baseline; }

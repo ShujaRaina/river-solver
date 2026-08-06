@@ -17,10 +17,25 @@ function displayName(a) {
   return a;
 }
 
-// stable per-page id so the server scopes "cancel my previous solve" to this
-// browser tab (re-clicking Solve cancels only my own in-flight solve, never
-// another user's on the shared deploy).
-const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+// stable id so the server scopes "cancel my previous solve" to this browser
+// (re-clicking Solve cancels only my own in-flight solve, never another user's
+// on the shared deploy). Persisted in localStorage so a REFRESH keeps the same
+// id -- otherwise a fresh id would fail to cancel the solve the old page left
+// running, and that orphan would hold the single concurrency slot.
+const CLIENT_ID = (() => {
+  let id = localStorage.getItem("rs_client");
+  if (!id) {
+    id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem("rs_client", id);
+  }
+  return id;
+})();
+
+// Cancel any in-flight solve when the page is hidden/closed/refreshed, so it
+// frees the slot immediately instead of running on to the backstop orphaned.
+window.addEventListener("pagehide", () => {
+  navigator.sendBeacon("/river/cancel", JSON.stringify({ client: CLIENT_ID }));
+});
 
 // bet sizes offered to the solver (fractions of pot); all-in is auto-added by
 // the engine, so this menu of 4 -> five actions (33/66/100/200/all-in).
@@ -33,6 +48,8 @@ const state = {
   paintWeight: 1.0,
   painting: false,
   paintMode: "paint",        // or "erase"
+  currentJob: null,          // id of the active/last solve (for Stop/Resume)
+  resumable: false,          // last job kept a resumable solver
 };
 
 function slotCount() { return state.street === "turn" ? 4 : 5; }
@@ -128,12 +145,19 @@ function paintGrid(player) {
 }
 
 // ---- solve + results ------------------------------------------------------
+// Button state: while solving -> only Stop; when idle -> Solve, plus Resume if
+// the last job kept a resumable solver.
+function setSolving(on) {
+  document.getElementById("solve").disabled = on;
+  document.getElementById("stop").disabled = !on;
+  document.getElementById("resume").disabled = on || !(state.resumable && state.currentJob);
+}
+
 async function solve() {
   if (state.street === "turn") return solveTurn();
   const status = document.getElementById("status");
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
-  const btn = document.getElementById("solve");
-  btn.disabled = true; status.textContent = "starting…";
+  setSolving(true); status.textContent = "starting…";
   let start;
   try {
     start = await (await fetch("/river/solve", {
@@ -147,25 +171,61 @@ async function solve() {
         fractions: BET_SIZES,
       }),
     })).json();
-  } catch (e) { status.textContent = "request failed: " + e.message; btn.disabled = false; return; }
-  if (start.error) { status.textContent = "error: " + start.error; btn.disabled = false; return; }
+  } catch (e) { status.textContent = "request failed: " + e.message; state.resumable = false; setSolving(false); return; }
+  if (start.error) { status.textContent = "error: " + start.error; state.resumable = false; setSolving(false); return; }
+  state.currentJob = start.id;
+  pollJob(start.id);
+}
 
-  const id = start.id;                        // poll for the live ticking counter
+// Poll a job to the ticking counter; on finish, flip buttons and note whether
+// it can be resumed (stopped early or under the iteration cap).
+function pollJob(id) {
+  const status = document.getElementById("status");
   const poll = async () => {
+    if (state.currentJob !== id) return;      // a newer solve superseded this poll
     let d;
     try { d = await (await fetch("/river/progress/" + id)).json(); }
-    catch (e) { status.textContent = "poll failed: " + e.message; btn.disabled = false; return; }
-    if (d.error) { status.textContent = "error: " + d.error; btn.disabled = false; return; }
+    catch (e) { status.textContent = "poll failed: " + e.message; setSolving(false); return; }
+    if (d.error) { status.textContent = "error: " + d.error; state.resumable = false; setSolving(false); return; }
+    const reached = d.iter >= d.target;
     status.textContent = d.timeout
       ? `stopped at time limit — ${d.iter} iterations (spot too deep to fully converge)`
       : d.done
-      ? `done — ${d.iter} iterations`
+      ? `${reached ? "done" : "stopped"} — ${d.iter} iterations`
       : `solving…  ${d.iter} / ${d.target} iterations`;
     if (d.actions && d.actions.length) renderResult(d);
-    if (d.done) { btn.disabled = false; return; }
+    if (d.done) { state.resumable = !!d.resumable; setSolving(false); return; }
     setTimeout(poll, 200);
   };
   poll();
+}
+
+async function stopSolve() {
+  document.getElementById("stop").disabled = true;   // the poll loop finalizes the rest
+  try {
+    await fetch("/river/cancel", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client: CLIENT_ID }),
+    });
+  } catch (e) { /* the worker will stop on its next chunk regardless */ }
+}
+
+async function resumeSolve() {
+  if (!state.currentJob) return;
+  const status = document.getElementById("status");
+  setSolving(true); status.textContent = "resuming…";
+  let r;
+  try {
+    r = await (await fetch("/river/resume", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: state.currentJob, client: CLIENT_ID,
+        iters: +document.getElementById("iters").value,
+      }),
+    })).json();
+  } catch (e) { status.textContent = "request failed: " + e.message; setSolving(false); return; }
+  if (r.error) { status.textContent = "error: " + r.error; state.resumable = false; setSolving(false); return; }
+  pollJob(state.currentJob);
 }
 
 async function solveTurn() {
@@ -245,6 +305,8 @@ document.getElementById("weight").addEventListener("input", e => {
 for (const b of document.querySelectorAll(".clear"))
   b.onclick = () => { state.ranges[b.dataset.player] = {}; paintGrid(+b.dataset.player); };
 document.getElementById("solve").onclick = solve;
+document.getElementById("stop").onclick = stopSolve;
+document.getElementById("resume").onclick = resumeSolve;
 for (const r of document.querySelectorAll('input[name="street"]')) {
   r.onchange = () => {
     state.street = r.value;

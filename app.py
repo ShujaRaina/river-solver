@@ -208,11 +208,34 @@ def _root_grid(acting_range, combos, avg):
     return grid
 
 
-def _river_worker(job, board, r0c, r1c, pot, stack, fractions, target):
-    # Wait for a concurrency slot, bailing early if we've already been cancelled
-    # (a newer solve superseded us while we queued).
+def _run_training(job, s, r0, r1, target):
+    """Train solver `s` up to `target` iters, publishing progress into `job`.
+    Stops early on the cancel flag (Stop button / unload) or the wall-clock
+    backstop. Leaves `s` intact so the job can be resumed from where it stopped."""
+    w = r0 / r0.sum()
+    deadline = _monotonic() + config.SOLVE_TIMEOUT_S
+    while s._t < target and not job["cancel"]:
+        s.train(min(25, target - s._t), range0=r0, range1=r1, plus=True)  # a chunk
+        avg = s.average_strategy(s.root)
+        job["iter"] = s._t
+        job["mix"] = [round(float(x), 4) for x in (w @ avg)]
+        job["strategy"] = _root_grid(r0, s.combos, avg)
+        job["exploitability_bb"] = round(float(s.exploitability()), 3)
+        if _monotonic() > deadline:                # wall-clock backstop (R-DEP-9)
+            job["timeout"] = True
+            break
+    job["resumable"] = s._t < config.MAX_ITERS      # can still add iterations
+    job["done"] = True
+
+
+def _river_worker(job, target, board=None, r0c=None, r1c=None,
+                  pot=None, stack=None, fractions=None):
+    """Run a solve under the concurrency slot. If `job` already holds a solver
+    (Resume), continue training it; otherwise build one from the params."""
     acquired = False
     try:
+        # Wait for a concurrency slot, bailing early if we've been cancelled
+        # (a newer solve superseded us, or Stop was hit, while we queued).
         while not job["cancel"]:
             if _solve_slots.acquire(timeout=0.5):
                 acquired = True
@@ -221,28 +244,21 @@ def _river_worker(job, board, r0c, r1c, pot, stack, fractions, target):
             job["done"] = True
             return
 
-        s = Solver(board, float(pot), float(stack), tuple(fractions),
-                   max_nodes=config.MAX_TREE_NODES)
-        r0 = range_from_classes(r0c, s.combos)
-        r1 = range_from_classes(r1c, s.combos)
-        if r0.sum() <= 0 or r1.sum() <= 0:
-            job["error"] = "both players need a non-empty range"
-            job["done"] = True
-            return
-        job["actions"] = s.root.labels()
-        w = r0 / r0.sum()
-        deadline = _monotonic() + config.SOLVE_TIMEOUT_S
-        while s._t < target and not job["cancel"]:
-            s.train(min(25, target - s._t), range0=r0, range1=r1, plus=True)  # a chunk
-            avg = s.average_strategy(s.root)
-            job["iter"] = s._t
-            job["mix"] = [round(float(x), 4) for x in (w @ avg)]
-            job["strategy"] = _root_grid(r0, s.combos, avg)
-            job["exploitability_bb"] = round(float(s.exploitability()), 3)
-            if _monotonic() > deadline:            # wall-clock backstop (R-DEP-9)
-                job["timeout"] = True
-                break
-        job["done"] = True
+        s = job.get("_solver")
+        if s is None:                               # initial solve: build it
+            s = Solver(board, float(pot), float(stack), tuple(fractions),
+                       max_nodes=config.MAX_TREE_NODES)
+            r0 = range_from_classes(r0c, s.combos)
+            r1 = range_from_classes(r1c, s.combos)
+            if r0.sum() <= 0 or r1.sum() <= 0:
+                job["error"] = "both players need a non-empty range"
+                job["done"] = True
+                return
+            job["_solver"], job["_r0"], job["_r1"] = s, r0, r1
+            job["actions"] = s.root.labels()
+        else:                                       # resume: reuse the solver
+            r0, r1 = job["_r0"], job["_r1"]
+        _run_training(job, s, r0, r1, target)
     except TreeTooLarge as e:
         job["error"] = str(e)
         job["done"] = True
@@ -286,17 +302,62 @@ def river_solve():
         jid = uuid.uuid4().hex[:8]
         job = {"iter": 0, "done": False, "strategy": {}, "mix": [], "actions": [],
                "exploitability_bb": None, "target": params["iters"],
-               "cancel": False, "_ts": _monotonic()}
+               "resumable": False, "cancel": False, "_ts": _monotonic()}
         _river_jobs[jid] = job
         if token:
             _river_last[token] = job
         _evict_jobs()
 
-    threading.Thread(target=_river_worker, daemon=True, args=(
-        job, params["board"], params["range0"], params["range1"],
-        params["pot"], params["stack"], params["fractions"],
-        params["iters"])).start()
+    threading.Thread(target=_river_worker, daemon=True, kwargs=dict(
+        job=job, target=params["iters"], board=params["board"],
+        r0c=params["range0"], r1c=params["range1"], pot=params["pot"],
+        stack=params["stack"], fractions=params["fractions"])).start()
     return jsonify({"id": jid, "target": params["iters"]})
+
+
+@app.route("/river/resume", methods=["POST"])
+@rate_limited
+def river_resume():
+    """Continue a stopped/finished solve from where it left off, up to a new
+    target (the current Iterations value). Reuses the job's kept solver so its
+    accumulated regrets carry over -- no restart from zero."""
+    data = request.get_json(force=True, silent=True) or {}
+    job = _river_jobs.get(data.get("id"))
+    if job is None or job.get("_solver") is None:
+        return jsonify({"error": "nothing to resume (the solve expired)"}), 404
+    s = job["_solver"]
+    if s._t >= config.MAX_ITERS:
+        return jsonify({"error": "already at the iteration cap"}), 400
+    try:
+        want = int(_clamp(_num(data.get("iters", job["target"]), "iters"),
+                          1, config.MAX_ITERS))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    target = want if want > s._t else min(s._t + 500, config.MAX_ITERS)
+    with _jobs_lock:
+        job["cancel"] = False
+        job["done"] = False
+        job["timeout"] = False
+        job["target"] = target
+    threading.Thread(target=_river_worker, daemon=True,
+                     kwargs=dict(job=job, target=target)).start()
+    return jsonify({"id": data.get("id"), "target": target})
+
+
+@app.route("/river/cancel", methods=["POST"])
+def river_cancel():
+    """Cancel a client's in-flight solve (sent via sendBeacon on page unload,
+    so a refresh/close frees the single concurrency slot immediately rather than
+    leaving an orphaned solve running to the backstop). Body: {"client": token}.
+    sendBeacon posts as text/plain, so force JSON parsing."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("client")
+    if isinstance(token, str):
+        with _jobs_lock:
+            job = _river_last.get(token)
+            if job is not None and not job.get("done"):
+                job["cancel"] = True
+    return ("", 204)
 
 
 @app.route("/river/progress/<jid>")
