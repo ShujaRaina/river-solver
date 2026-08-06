@@ -47,26 +47,38 @@
 
     <!-- Controls -->
     <section class="panel controls">
-      <label>Pot <input type="number" id="pot" value="20" min="1" /></label>
-      <label>Stack <input type="number" id="stack" value="80" min="1" /></label>
-      <label>Iterations <input type="number" id="iters" value="1000" min="20" max="3000" step="10" /></label>
-      <div class="sizes-control">
-        <label for="nsizes">Bet sizes (% pot)</label>
-        <input type="range" id="nsizes" class="nsize-slider" min="1" max="5" value="3" />
-        <span id="nsizes-count" class="nsize-count">3 bet sizes</span>
-        <span class="betsizes">
-          <input type="number" class="betsize" value="33" min="5" max="300" step="1" />
-          <input type="number" class="betsize" value="66" min="5" max="300" step="1" />
-          <input type="number" class="betsize" value="100" min="5" max="300" step="1" />
-          <input type="number" class="betsize" value="150" min="5" max="300" step="1" />
-          <input type="number" class="betsize" value="200" min="5" max="300" step="1" />
-        </span>
+      <div class="control-line">
+        <label>Pot <input type="number" id="pot" value="20" min="1" /></label>
+        <label>Stack <input type="number" id="stack" value="80" min="1" /></label>
+        <label>Iterations <input type="number" id="iters" value="1000" min="20" max="3000" step="10" /></label>
+        <button id="solve" class="solve">Solve</button>
+        <button id="stop" class="solve btn-stop" disabled>Stop</button>
+        <button id="resume" class="solve btn-resume" disabled>Resume</button>
+        <span id="status" class="status"></span>
+      </div>
+      <div class="control-line sizes-control">
+        <div class="sizes-row">
+          <label for="nsizes">Bet sizes (% pot)</label>
+          <span class="slider-wrap">
+            <span class="slider-end">1</span>
+            <input type="range" id="nsizes" class="nsize-slider" min="1" max="5" value="3" step="1" list="nsizes-ticks" />
+            <span class="slider-end">5</span>
+          </span>
+          <datalist id="nsizes-ticks">
+            <option value="1"></option><option value="2"></option><option value="3"></option>
+            <option value="4"></option><option value="5"></option>
+          </datalist>
+          <span id="nsizes-count" class="nsize-count">3 bet sizes</span>
+          <span class="betsizes">
+            <input type="number" class="betsize" value="33" min="5" max="300" step="1" />
+            <input type="number" class="betsize" value="66" min="5" max="300" step="1" />
+            <input type="number" class="betsize" value="100" min="5" max="300" step="1" />
+            <input type="number" class="betsize" value="150" min="5" max="300" step="1" />
+            <input type="number" class="betsize" value="200" min="5" max="300" step="1" />
+          </span>
+        </div>
         <div id="sizes-warn" class="warn" hidden>⚠ 4–5 bet sizes enlarge the game tree and can slow solves noticeably.</div>
       </div>
-      <button id="solve" class="solve">Solve</button>
-      <button id="stop" class="solve btn-stop" disabled>Stop</button>
-      <button id="resume" class="solve btn-resume" disabled>Resume</button>
-      <span id="status" class="status"></span>
     </section>
 
     <!-- Results -->
