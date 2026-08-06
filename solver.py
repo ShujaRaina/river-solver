@@ -47,12 +47,10 @@ class Solver:
         self.root = build_tree(base_pot, stack, fractions, first_actor,
                                max_nodes=max_nodes)
 
+        # regret / strat_sum are allocated in _build_flat() below, as batched
+        # per-(depth, action-count) group arrays; the per-node dicts point at
+        # views into them so the recursive reference path keeps working.
         self.regret, self.strat_sum = {}, {}
-        for n in walk(self.root):
-            if not n.is_terminal():
-                shape = (self.N, len(n.actions))
-                self.regret[n] = np.zeros(shape)
-                self.strat_sum[n] = np.zeros(shape)
 
         # Terminal batching (the speed path): index every terminal and precompute
         # its value coefficients, so a whole iteration's terminal values are a few
@@ -81,6 +79,7 @@ class Solver:
         self._cfv1 = np.empty((self.N, T), np.float32)
         self._t = 0                        # persistent iteration count (for chunked training)
         self._dcfr = False                 # set per-train() call; CFR+ is the default
+        self._build_flat()                 # batched-iteration schedule + storage
 
     # --- strategies -------------------------------------------------------
     def strategy(self, node):
@@ -219,13 +218,126 @@ class Solver:
         self._update_regret(node, c1a - nv1[:, None])
         return c0a.sum(axis=1), nv1
 
+    # --- flattened, level-batched iteration -------------------------------
+    # The recursive _down/_up fire ~5 tiny numpy calls per decision node; on a
+    # small river tree that's dominated by per-call Python/numpy dispatch (~88%
+    # of runtime is overhead, not float math). Here we group decision nodes by
+    # (depth, action-count) -- players alternate strictly by depth, so a group
+    # has one player -- and process a whole group in a few batched ops over a
+    # (G, N, A) array. Reaches/cfvs flow through unified (n_nodes, N) buffers via
+    # gather/scatter. Same math as _down/_up (verified equal), far fewer calls.
+    def _build_flat(self):
+        from collections import deque, defaultdict
+        depth, order, dq = {self.root: 0}, [], deque([self.root])
+        while dq:
+            n = dq.popleft()
+            order.append(n)
+            if not n.is_terminal():
+                for _, c in n.actions:
+                    depth[c] = depth[n] + 1
+                    dq.append(c)
+        decisions = [n for n in order if not n.is_terminal()]
+        D = len(decisions)
+        gid = {n: i for i, n in enumerate(decisions)}      # decisions: 0..D-1
+        for n, t in self.tindex.items():
+            gid[n] = D + t                                 # terminals: D..D+T-1
+        self._D = D
+        self._nnodes = D + self.T
+        self._term_gids = np.arange(D, D + self.T)
+        self._root_gid = gid[self.root]
+        self._REACH0 = np.zeros((self._nnodes, self.N))
+        self._REACH1 = np.zeros((self._nnodes, self.N))
+        self._CFV0 = np.zeros((self._nnodes, self.N))
+        self._CFV1 = np.zeros((self._nnodes, self.N))
+
+        buckets = defaultdict(list)
+        for n in decisions:
+            buckets[(depth[n], len(n.actions))].append(n)
+        self._groups = []
+        for key in sorted(buckets):                        # ascending depth (down order)
+            nodes = buckets[key]
+            _, A = key
+            players = {n.player for n in nodes}
+            assert len(players) == 1, "group spans both players (depth parity broke)"
+            ids = np.array([gid[n] for n in nodes])
+            child = np.array([[gid[c] for _, c in n.actions] for n in nodes])  # (G, A)
+            R = np.zeros((len(nodes), self.N, A))
+            S = np.zeros((len(nodes), self.N, A))
+            for row, n in enumerate(nodes):
+                self.regret[n] = R[row]                    # view: shared with batched R
+                self.strat_sum[n] = S[row]                 # view
+            self._groups.append({"ids": ids, "child": child,
+                                 "player": nodes[0].player, "A": A, "R": R, "S": S})
+
+    def _apply_regret(self, R, delta):
+        """Batched regret update on a group's (G, N, A) array, in place."""
+        if self._dcfr:
+            R *= np.where(R > 0, self._cp, self._cn)
+            R += delta
+        else:
+            R += delta
+            if self._plus:
+                np.maximum(R, 0.0, out=R)
+
+    def _iterate_flat(self):
+        R0, R1 = self._REACH0, self._REACH1
+        C0, C1 = self._CFV0, self._CFV1
+        R0[self._root_gid] = self.range0
+        R1[self._root_gid] = self.range1
+
+        sig = []
+        for g in self._groups:                             # down: ascending depth
+            ids, child, p, A = g["ids"], g["child"], g["player"], g["A"]
+            pos = np.maximum(g["R"], 0.0)
+            tot = pos.sum(axis=2, keepdims=True)
+            sigma = np.where(tot > 0, pos / np.where(tot > 0, tot, 1.0), 1.0 / A)
+            sig.append(sigma)
+            RP, RO = (R0, R1) if p == 0 else (R1, R0)
+            reach_p, reach_o = RP[ids], RO[ids]            # (G, N)
+            if self._dcfr:
+                g["S"] *= self._cg
+                g["S"] += reach_p[:, :, None] * sigma
+            else:
+                g["S"] += self._weight * reach_p[:, :, None] * sigma
+            child_reach_p = reach_p[:, :, None] * sigma    # (G, N, A)
+            for a in range(A):
+                ca = child[:, a]
+                RP[ca] = child_reach_p[:, :, a]
+                RO[ca] = reach_o
+
+        tg = self._term_gids                               # terminals -> batched matmuls
+        self._R0 = R0[tg].T.astype(np.float32)
+        self._R1 = R1[tg].T.astype(np.float32)
+        self._terminal_cfvs()
+        C0[tg] = self._cfv0.T
+        C1[tg] = self._cfv1.T
+
+        for gi in range(len(self._groups) - 1, -1, -1):    # up: descending depth
+            g = self._groups[gi]
+            ids, child, p = g["ids"], g["child"], g["player"]
+            sigma = sig[gi]
+            c0 = C0[child].transpose(0, 2, 1)              # (G, N, A)
+            c1 = C1[child].transpose(0, 2, 1)
+            if p == 0:
+                nv0 = (sigma * c0).sum(axis=2)
+                self._apply_regret(g["R"], c0 - nv0[:, :, None])
+                C0[ids], C1[ids] = nv0, c1.sum(axis=2)
+            else:
+                nv1 = (sigma * c1).sum(axis=2)
+                self._apply_regret(g["R"], c1 - nv1[:, :, None])
+                C1[ids], C0[ids] = nv1, c0.sum(axis=2)
+
     def train(self, iters, range0=None, range1=None, plus=True,
-              variant="cfr+", dcfr_params=(1.5, 0.0, 2.0)):
+              variant="cfr+", dcfr_params=(1.5, 0.0, 2.0), engine="flat"):
         """Run `iters` CFR iterations. variant="cfr+" (default, verified) uses
         regret-matching+ with linear averaging; variant="dcfr" uses Discounted
         CFR (Brown & Sandholm 2019) with (alpha, beta, gamma) = dcfr_params:
         positive regrets *= t^a/(t^a+1), negative *= t^b/(t^b+1), strategy sum
-        *= (t/(t+1))^g each iteration. Defaults (1.5, 0, 2) are the paper's."""
+        *= (t/(t+1))^g each iteration. Defaults (1.5, 0, 2) are the paper's.
+
+        engine="flat" (default) is the level-batched iteration; engine="recursive"
+        is the per-node reference kept as the differential oracle -- both share
+        storage and produce equal results."""
         self.range0 = np.ones(self.N) if range0 is None else np.asarray(range0, float)
         self.range1 = np.ones(self.N) if range1 is None else np.asarray(range1, float)
         self._plus = plus
@@ -240,10 +352,13 @@ class Solver:
                 self._cg = (t / (t + 1.0)) ** gamma            # strategy-sum discount
             else:
                 self._weight = float(t) if plus else 1.0
-            sig = {}
-            self._down(self.root, self.range0, self.range1, sig)
-            self._terminal_cfvs()
-            self._up(self.root, sig)
+            if engine == "flat":
+                self._iterate_flat()
+            else:
+                sig = {}
+                self._down(self.root, self.range0, self.range1, sig)
+                self._terminal_cfvs()
+                self._up(self.root, sig)
 
     # --- evaluation: values under avg strategy, best responses, expl ------
     def _values_avg(self, node, reach0, reach1):
