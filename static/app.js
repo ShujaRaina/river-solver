@@ -46,6 +46,22 @@ function betSizes() {
     .filter(f => f >= 0.05 && f <= 3.0);
 }
 
+// A canonical signature of everything that defines the solve/tree (NOT iters --
+// adding iterations is exactly what Resume is for). If any of these changed
+// since the solve started, Resume must start fresh instead of continuing a
+// solver built for the old inputs. Board and range keys are sorted so a
+// re-pick in a different order doesn't look like a change.
+function solveSignature() {
+  const rangeKey = r => Object.keys(r).sort().map(k => `${k}:${r[k]}`).join(",");
+  return JSON.stringify({
+    board: [...state.board].sort(),
+    r0: rangeKey(state.ranges[0]), r1: rangeKey(state.ranges[1]),
+    pot: +document.getElementById("pot").value,
+    stack: +document.getElementById("stack").value,
+    sizes: betSizes(),
+  });
+}
+
 const state = {
   street: "river",           // "river" (5 cards) or "turn" (4 cards)
   board: [],                 // card strings, e.g. "As"
@@ -55,6 +71,7 @@ const state = {
   paintMode: "paint",        // or "erase"
   currentJob: null,          // id of the active/last solve (for Stop/Resume)
   resumable: false,          // last job kept a resumable solver
+  solveSignature: null,      // inputs the current solver was built for
 };
 
 function slotCount() { return state.street === "turn" ? 4 : 5; }
@@ -163,6 +180,7 @@ async function solve() {
   const status = document.getElementById("status");
   if (state.board.length !== 5) { status.textContent = "pick 5 board cards"; return; }
   if (!betSizes().length) { status.textContent = "enter at least one bet size (5–300%)"; return; }
+  state.solveSignature = solveSignature();     // remember what this solve is for
   setSolving(true); status.textContent = "starting…";
   let start;
   try {
@@ -218,6 +236,9 @@ async function stopSolve() {
 
 async function resumeSolve() {
   if (!state.currentJob) return;
+  // inputs changed since this solve was built -> the stored solver is stale;
+  // start a fresh solve for the new board/pot/stack/ranges/sizes instead.
+  if (solveSignature() !== state.solveSignature) return solve();
   const status = document.getElementById("status");
   setSolving(true); status.textContent = "resuming…";
   let r;
