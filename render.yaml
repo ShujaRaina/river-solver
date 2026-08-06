@@ -24,9 +24,9 @@ services:
         value: "1"          # 1 per vCPU; keep at 1 on starter (0.5 vCPU)
       # The rest inherit config.py defaults; override here to tune without a redeploy.
       - key: SOLVER_MAX_ITERS
-        value: "1500"
+        value: "3000"
       - key: SOLVER_TIMEOUT_S
-        value: "60"
+        value: "120"
       - key: SOLVER_MAX_TREE_NODES
         value: "5000"
       - key: SOLVER_RATE_LIMIT

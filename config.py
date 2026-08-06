@@ -23,7 +23,7 @@ def _float(name, default):
 
 
 # --- solve-cost clamps (R-DEP-1, R-DEP-2) ---------------------------------
-MAX_ITERS = _int("SOLVER_MAX_ITERS", 1500)        # server-side cap on iters
+MAX_ITERS = _int("SOLVER_MAX_ITERS", 3000)        # server-side cap on iters
 MAX_POT = _float("SOLVER_MAX_POT", 2000.0)        # bb
 MAX_STACK = _float("SOLVER_MAX_STACK", 2000.0)    # bb
 MIN_POT = _float("SOLVER_MIN_POT", 1.0)
@@ -42,7 +42,7 @@ except AttributeError:
     _cpu = os.cpu_count() or 2
 MAX_CONCURRENT_SOLVES = _int("SOLVER_MAX_CONCURRENT", max(1, _cpu))
 RATE_LIMIT = os.environ.get("SOLVER_RATE_LIMIT", "10 per minute")
-SOLVE_TIMEOUT_S = _float("SOLVER_TIMEOUT_S", 60.0)   # wall-clock backstop
+SOLVE_TIMEOUT_S = _float("SOLVER_TIMEOUT_S", 120.0)  # wall-clock backstop
 
 # --- job store (R-DEP-6) ---------------------------------------------------
 MAX_JOBS = _int("SOLVER_MAX_JOBS", 64)               # LRU-evict beyond this

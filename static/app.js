@@ -250,7 +250,7 @@ for (const r of document.querySelectorAll('input[name="street"]')) {
     state.street = r.value;
     document.getElementById("board-hint").textContent = "pick " + slotCount();
     if (state.board.length > slotCount()) state.board = state.board.slice(0, slotCount());
-    document.getElementById("iters").value = state.street === "turn" ? 60 : 250;
+    document.getElementById("iters").value = state.street === "turn" ? 60 : 1000;
     buildBoard();
   };
 }
