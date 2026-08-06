@@ -82,6 +82,7 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
   background: var(--accent); z-index: 0;
 }
 .cell.on { color: #fff; }
+.cell.selected { outline: 2px solid #fff; outline-offset: -2px; z-index: 2; }
 .cell span { position: relative; z-index: 1; }
 /* result cells show stacked action bars */
 .cell .bars { position: absolute; inset: 0; display: flex; z-index: 0; }
@@ -99,11 +100,14 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 }
 .solve:disabled { opacity: .5; cursor: default; }
 .sizes-control { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.sizes-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.slider-group { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+/* padding-bottom reserves room for the count that hangs under the slider; the
+   slider bar's vertical centre still lines up with the label and the boxes */
+.sizes-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 20px; }
+.slider-group { position: relative; display: inline-block; }
 /* override the generic .controls input {width:70px} for the slider + size boxes */
-.controls input.nsize-slider { width: 260px; accent-color: #4c9be8; padding: 0; border: none; background: none; }
-.nsize-count { color: var(--muted); font-size: 12px; }
+.controls input.nsize-slider { display: block; width: 260px; accent-color: #4c9be8; padding: 0; border: none; background: none; }
+.nsize-count { position: absolute; top: 100%; margin-top: 3px; transform: translateX(-50%);
+  color: var(--muted); font-size: 12px; }
 /* always reserve the warning's space (toggle visibility, not display) so the
    panel doesn't grow/shift when it appears at 4-5 sizes */
 .warn { color: #e9c46a; font-size: 12px; max-width: 460px; line-height: 1.35;
@@ -111,8 +115,8 @@ h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 .betsizes { display: inline-flex; gap: 5px; }
 .controls input.betsize { width: 4.8em; }
 .betsize[hidden] { display: none; }
-.solve.btn-stop { background: transparent; color: #e5484d; border: 1px solid #e5484d; }
-.solve.btn-resume { background: transparent; color: #3fb27f; border: 1px solid #3fb27f; }
+.solve.btn-stop { background: #e5484d; color: #06121f; border: none; }
+.solve.btn-resume { background: #3fb27f; color: #06121f; border: none; }
 .status { color: var(--muted); }
 
 .result-head { display: flex; justify-content: space-between; align-items: baseline; }

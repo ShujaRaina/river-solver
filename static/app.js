@@ -51,9 +51,14 @@ function betSizes() {
 // reflect the slider: show N size boxes, update the count, warn at 4-5 (a
 // bigger tree slows solves, especially on the small hosted box).
 function updateSizeCount() {
-  const n = +document.getElementById("nsizes").value;
+  const slider = document.getElementById("nsizes");
+  const n = +slider.value;
   document.querySelectorAll(".betsize").forEach((el, i) => { el.hidden = i >= n; });
-  document.getElementById("nsizes-count").textContent = n;
+  const count = document.getElementById("nsizes-count");
+  count.textContent = n;
+  // place the number directly under the slider thumb (tracks it across 1-5)
+  const w = slider.offsetWidth || 260, thumb = 16;
+  count.style.left = (((n - 1) / 4) * (w - thumb) + thumb / 2) + "px";
   // toggle visibility (not display) so the warning's space is always reserved
   document.getElementById("sizes-warn").style.visibility = n >= 4 ? "visible" : "hidden";
 }
@@ -81,6 +86,7 @@ const state = {
   paintWeight: 1.0,
   painting: false,
   paintMode: "paint",        // or "erase"
+  selection: { player: null, labels: new Set() },  // hands the weight slider edits
   currentJob: null,          // id of the active/last solve (for Stop/Resume)
   resumable: false,          // last job kept a resumable solver
   solveSignature: null,      // inputs the current solver was built for
@@ -156,15 +162,45 @@ function buildGrid(player) {
   paintGrid(player);
 }
 
+// Select-first workflow: painting SELECTS hands (into the range at full weight)
+// and makes them the active selection; the Hand weight slider then sets the
+// weight of that selection. Each new stroke starts a fresh selection at 100%.
 function startPaint(player, label) {
   state.painting = true;
   state.paintMode = state.ranges[player][label] ? "erase" : "paint";
+  if (state.paintMode === "paint") {
+    clearSelection();
+    state.selection.player = player;
+    resetHandWeight();                 // a fresh selection starts full (100%)
+  }
   applyPaint(player, label);
 }
 function applyPaint(player, label) {
-  if (state.paintMode === "paint") state.ranges[player][label] = state.paintWeight;
-  else delete state.ranges[player][label];
+  if (state.paintMode === "paint") {
+    if (state.selection.player !== player) return;   // don't cross grids mid-stroke
+    state.ranges[player][label] = state.paintWeight;
+    state.selection.labels.add(label);
+    markSelected(player, label, true);
+  } else {
+    delete state.ranges[player][label];
+    state.selection.labels.delete(label);
+    markSelected(player, label, false);
+  }
   paintCell(player, label);
+}
+function clearSelection() {
+  const { player, labels } = state.selection;
+  if (player != null) for (const lab of labels) markSelected(player, lab, false);
+  state.selection = { player: null, labels: new Set() };
+}
+function markSelected(player, label, on) {
+  const cell = document.querySelector(`#grid-${player} .cell[data-label="${label}"]`);
+  if (cell) cell.classList.toggle("selected", on);
+}
+function resetHandWeight() {
+  state.paintWeight = 1.0;
+  document.getElementById("weight").value = 100;
+  document.getElementById("weight-label").textContent = "100%";
 }
 function paintCell(player, label) {
   const cell = document.querySelector(`#grid-${player} .cell[data-label="${label}"]`);
@@ -341,9 +377,16 @@ document.addEventListener("mouseup", () => { state.painting = false; });
 document.getElementById("weight").addEventListener("input", e => {
   state.paintWeight = e.target.value / 100;
   document.getElementById("weight-label").textContent = e.target.value + "%";
+  // apply the weight to the currently selected hands (select-then-weight)
+  const { player, labels } = state.selection;
+  if (player != null) for (const lab of labels) {
+    if (state.paintWeight > 0) state.ranges[player][lab] = state.paintWeight;
+    else delete state.ranges[player][lab];       // dialing to 0% removes the hand
+    paintCell(player, lab);
+  }
 });
 for (const b of document.querySelectorAll(".clear"))
-  b.onclick = () => { state.ranges[b.dataset.player] = {}; paintGrid(+b.dataset.player); };
+  b.onclick = () => { state.ranges[b.dataset.player] = {}; clearSelection(); paintGrid(+b.dataset.player); };
 document.getElementById("solve").onclick = solve;
 document.getElementById("stop").onclick = stopSolve;
 document.getElementById("resume").onclick = resumeSolve;
