@@ -1,0 +1,4 @@
+Playing-card SVGs from the "Vector Playing Cards" project
+(http://code.google.com/p/vector-playing-cards/), which are in the PUBLIC DOMAIN.
+Obtained via github.com/hayeah/playing-cards-assets (repo wrapper: MIT).
+No attribution is required; credited here as good practice.

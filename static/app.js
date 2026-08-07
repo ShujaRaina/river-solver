@@ -108,12 +108,13 @@ function classLabel(row, col) {
 }
 
 // ---- board ----------------------------------------------------------------
-// suit colours on a white card face (four-colour deck)
-const CARD_COLOR = { s: "#101418", h: "#d21f2b", d: "#1668d6", c: "#188a3e" };
-function suitSym(su) { return (SUITS.find(x => x[0] === su) || [, "?"])[1]; }
-// a white playing-card face: big rank on top, suit centred below
+// real card faces from a public-domain SVG deck served at /cards/
+const RANK_WORD = { A: "ace", K: "king", Q: "queen", J: "jack", T: "10",
+  "9": "9", "8": "8", "7": "7", "6": "6", "5": "5", "4": "4", "3": "3", "2": "2" };
+const SUIT_WORD = { s: "spades", h: "hearts", d: "diamonds", c: "clubs" };
 function cardFace(card) {
-  return `<span class="pc-rank">${card[0]}</span><span class="pc-suit">${suitSym(card[1])}</span>`;
+  const src = `/cards/${RANK_WORD[card[0]]}_of_${SUIT_WORD[card[1]]}.svg`;
+  return `<img class="card-img" src="${src}" alt="${card}" draggable="false">`;
 }
 
 function buildBoard() {
@@ -122,13 +123,8 @@ function buildBoard() {
   for (let i = 0; i < slotCount(); i++) {
     const s = document.createElement("div");
     const card = state.board[i];
-    if (card) {
-      s.className = "slot filled";
-      s.style.color = CARD_COLOR[card[1]];
-      s.innerHTML = cardFace(card);
-    } else {
-      s.className = "slot";
-    }
+    s.className = card ? "slot filled" : "slot";
+    if (card) s.innerHTML = cardFace(card);
     slots.appendChild(s);
   }
 
@@ -139,7 +135,6 @@ function buildBoard() {
         const card = r + su;
         const b = document.createElement("button");
         b.className = "card";
-        b.style.color = CARD_COLOR[su];
         b.innerHTML = cardFace(card);
         b.dataset.card = card;
         b.onclick = () => toggleBoardCard(card);
@@ -419,11 +414,11 @@ function onComboClick(label) {
   renderComboView(label);
 }
 
-// a card string like "Kd" -> its rank + coloured suit symbol
+// a card string like "Kd" -> rank + suit symbol. Black with a white halo so it
+// stays readable over any strategy colour (suit is told apart by the symbol).
 function cardHTML(card) {
   const sym = (SUITS.find(x => x[0] === card[1]) || [, "?"])[1];
-  const color = { s: "#e6edf3", h: "#ff6b6b", d: "#5aa9ff", c: "#4cd07d" }[card[1]];
-  return `<span style="color:${color}">${card[0]}${sym}</span>`;
+  return `<span class="combo-card">${card[0]}${sym}</span>`;
 }
 
 async function renderComboView(label) {
@@ -453,7 +448,7 @@ async function renderComboView(label) {
   view.innerHTML =
     `<div class="combo-title">${label} — ${nValid} of ${d.combos.length} combos` +
     ` <span class="combo-close">✕ close</span></div>` +
-    `<div class="combo-grid" style="grid-template-columns:repeat(${cols},64px)">${cells.join("")}</div>`;
+    `<div class="combo-grid" style="grid-template-columns:repeat(${cols},90px)">${cells.join("")}</div>`;
   view.querySelector(".combo-close").onclick = () => { view.hidden = true; state.comboLabel = null; };
   view.hidden = false;
 }
