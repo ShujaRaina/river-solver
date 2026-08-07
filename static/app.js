@@ -108,29 +108,40 @@ function classLabel(row, col) {
 }
 
 // ---- board ----------------------------------------------------------------
+// suit colours on a white card face (four-colour deck)
+const CARD_COLOR = { s: "#101418", h: "#d21f2b", d: "#1668d6", c: "#188a3e" };
+function suitSym(su) { return (SUITS.find(x => x[0] === su) || [, "?"])[1]; }
+// a white playing-card face: rank+suit in the corner, a big centre pip
+function cardFace(card) {
+  const sym = suitSym(card[1]);
+  return `<span class="pc-corner">${card[0]}<br>${sym}</span><span class="pc-pip">${sym}</span>`;
+}
+
 function buildBoard() {
   const slots = document.getElementById("board-slots");
   slots.innerHTML = "";
   for (let i = 0; i < slotCount(); i++) {
     const s = document.createElement("div");
-    s.className = "slot";
     const card = state.board[i];
     if (card) {
-      s.textContent = card[0] + SUITS.find(x => x[0] === card[1])[1];
-      s.classList.add(SUITS.find(x => x[0] === card[1])[2]);
-      s.style.color = { s: "#e6edf3", h: "#ff6b6b", d: "#5aa9ff", c: "#4cd07d" }[card[1]];
+      s.className = "slot filled";
+      s.style.color = CARD_COLOR[card[1]];
+      s.innerHTML = cardFace(card);
+    } else {
+      s.className = "slot";
     }
     slots.appendChild(s);
   }
 
   const picker = document.getElementById("card-picker");
   if (picker.childElementCount === 0) {
-    for (const [su, sym, cls] of SUITS) {
+    for (const [su] of SUITS) {
       for (const r of RANKS) {
         const card = r + su;
         const b = document.createElement("button");
-        b.className = "card " + cls;
-        b.textContent = r + sym;
+        b.className = "card";
+        b.style.color = CARD_COLOR[su];
+        b.innerHTML = cardFace(card);
         b.dataset.card = card;
         b.onclick = () => toggleBoardCard(card);
         picker.appendChild(b);
