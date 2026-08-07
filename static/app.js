@@ -111,10 +111,9 @@ function classLabel(row, col) {
 // suit colours on a white card face (four-colour deck)
 const CARD_COLOR = { s: "#101418", h: "#d21f2b", d: "#1668d6", c: "#188a3e" };
 function suitSym(su) { return (SUITS.find(x => x[0] === su) || [, "?"])[1]; }
-// a white playing-card face: rank+suit in the corner, a big centre pip
+// a white playing-card face: big rank on top, suit centred below
 function cardFace(card) {
-  const sym = suitSym(card[1]);
-  return `<span class="pc-corner">${card[0]}<br>${sym}</span><span class="pc-pip">${sym}</span>`;
+  return `<span class="pc-rank">${card[0]}</span><span class="pc-suit">${suitSym(card[1])}</span>`;
 }
 
 function buildBoard() {
