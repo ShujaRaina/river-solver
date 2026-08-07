@@ -361,19 +361,20 @@ def river_cancel():
     return ("", 204)
 
 
-def _fmt_combo(a, b):
-    """Format a combo's two cards as 'As Kd', higher rank first."""
+def _combo_cards(a, b):
+    """The two card strings, higher rank first (e.g. ['As', 'Kd'])."""
     sa, sb = card_str(a), card_str(b)
     if RANKS.index(sa[0]) > RANKS.index(sb[0]):
         sa, sb = sb, sa
-    return f"{sa} {sb}"
+    return [sa, sb]
 
 
 @app.route("/river/combos/<jid>")
 def river_combos(jid):
-    """Per-combo breakdown of one hand class (e.g. AKo) for the current solve:
-    each specific combo with its input weight and current average strategy.
-    Reads the job's kept solver, so it works during and after solving."""
+    """Per-combo breakdown of one hand class (e.g. AKo) for the current solve.
+    Returns EVERY combo of the class; the ones a board card blocks are flagged
+    `blocked` (no weight/strategy), the rest carry their input weight and current
+    average strategy. Reads the job's kept solver, so it works during and after."""
     job = _river_jobs.get(jid)
     if job is None or job.get("_solver") is None:
         return jsonify({"error": "no solve to inspect"}), 404
@@ -387,12 +388,14 @@ def river_combos(jid):
     index = {c: i for i, c in enumerate(s.combos)}
     combos = []
     for combo in want:
+        entry = {"cards": _combo_cards(*combo)}
         i = index.get(combo)
         if i is None:
-            continue                                        # board blocks this combo
-        combos.append({"combo": _fmt_combo(*combo),
-                       "weight": round(float(rng[i]), 4),
-                       "strategy": [round(float(x), 4) for x in avg[i]]})
+            entry["blocked"] = True                         # uses a board card
+        else:
+            entry["weight"] = round(float(rng[i]), 4)
+            entry["strategy"] = [round(float(x), 4) for x in avg[i]]
+        combos.append(entry)
     return jsonify({"actions": s.root.labels(), "combos": combos})
 
 

@@ -409,6 +409,13 @@ function onComboClick(label) {
   renderComboView(label);
 }
 
+// a card string like "Kd" -> its rank + coloured suit symbol
+function cardHTML(card) {
+  const sym = (SUITS.find(x => x[0] === card[1]) || [, "?"])[1];
+  const color = { s: "#e6edf3", h: "#ff6b6b", d: "#5aa9ff", c: "#4cd07d" }[card[1]];
+  return `<span style="color:${color}">${card[0]}${sym}</span>`;
+}
+
 async function renderComboView(label) {
   if (!state.currentJob) return;
   state.comboLabel = label;
@@ -422,17 +429,19 @@ async function renderComboView(label) {
   const isPair = label.length === 2;
   const isSuited = label.endsWith("s");
   const cols = isPair ? 3 : isSuited ? 2 : 4;
-  const total = isPair ? 6 : isSuited ? 4 : 12;
 
   const cells = d.combos.map(cb => {
+    const lbl = cb.cards.map(cardHTML).join(" ");
+    if (cb.blocked)                                    // board-blocked -> greyed, no strategy
+      return `<div class="cell blocked"><span>${lbl}</span></div>`;
     const bars = cb.strategy.map((f, i) =>
       `<i style="width:${f * 100}%;background:${actionColor(d.actions[i], i)}"></i>`).join("");
     return `<div class="cell on"><div class="bars" style="height:${cb.weight * 100}%">${bars}</div>` +
-           `<span>${cb.combo}</span></div>`;
+           `<span>${lbl}</span></div>`;
   });
-  while (cells.length < total) cells.push(`<div class="cell"></div>`);   // board-blocked -> empty
+  const nValid = d.combos.filter(c => !c.blocked).length;
   view.innerHTML =
-    `<div class="combo-title">${label} — ${d.combos.length} combo${d.combos.length === 1 ? "" : "s"}` +
+    `<div class="combo-title">${label} — ${nValid} of ${d.combos.length} combos` +
     ` <span class="combo-close">✕ close</span></div>` +
     `<div class="combo-grid" style="grid-template-columns:repeat(${cols},64px)">${cells.join("")}</div>`;
   view.querySelector(".combo-close").onclick = () => { view.hidden = true; state.comboLabel = null; };
